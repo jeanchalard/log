@@ -1,0 +1,210 @@
+This is a tool that reads a log minute-by-minute of a day
+and a set of rules on how to interpret it, and will create
+graphs and reports out of it.
+Dependencies : rvg and rmagick
+
+The log has a fairly simple format. Each line must either
+be the start of a day at the format 'MM-dd', a line starting
+with time at the 'HHMM' format followed by an activity, or
+a free-form line to match counters that's otherwise ignored.
+It looks like this :
+06-08
+0835 Got up, made coffee
+0840 Shower
+0902 Work on XXX
+...
+2321 Zzz
+06-09
+...
+
+An optional comment can be put after the date separated by
+a space and a colon.
+
+It will also take a rule file. The rules are essentially
+regexps that will be used to match any activity. The rule
+file is composed of multiple sections. A section is started
+by a line with the section name in square brackets. Any
+section can be given any number of times and the script
+will merge them. All sections are optional, although a
+missing [rules] section will result in no rules, meaning
+any non-empty data file will fail to parse, and a
+missing [general] sections will create output files with
+the name "unnamed".
+All section names can be suffixed with /i, which makes
+any regexps in the section case-insensitive ; though all
+sections support this, not all sections have regexps so
+it's not helpful for all sections.
+
+A [general] section can define a name (defaults to
+"unnamed") and a mode among 'calendar', 'occupation',
+'stack' and 'count' (defaults to 'calendar'). These are
+given with the 'name = ' and 'mode = ' directives, the
+format is fairly intuitive. The name and mode directives
+are special in two respects : they have to be given in
+the top-level file (they are ignored in included files)
+and if multiple of either directive are encountered then
+the latter directive wins.
+The [general] section also supports an
+'include <filename>' directive to load the given file
+at the time the include rule is encountered. Priorities
+between rules can be managed by having multiple [general]
+sections to have the includes in the desired order.
+
+The [rules] section is the most important section as it
+defines the list of rules that will be considered to
+interpret the log file. Each line must be at the
+following format :
+<regexp> = <activity>
+Spaces can be included in both the regexp and the
+activity name but the script will ignore spaces around
+the = sign, so an activity name can't start with a space.
+Any activity name is legal. The script will simply gather
+the list of activities from the list of targets of the
+list of rules.
+For each log line the script will find a matching regexp
+from the list of rules ; if multiple rules match a given
+log line, then the regexp given earlier in the rules file
+(including with the includes directives) will win.
+For convenience, the [rules] section can be written
+[rules/i], in which case all regexps will be considered
+case-insensitive.
+The "Zzz" activity is special, it means sleep and the
+tool will merge sleep on this night with the sleep on
+the morning of the next day. Sleep can't be called
+anything else (at least if this processing is desired).
+
+The [collapse] section defines a list of collapses, at
+the following format :
+A = B = ... = C = D
+This means category A and B and C (and any in between)
+should all be collapsed into category D. This is very
+useful to reuse rules but have different rules files
+that will collapse a more detailed ruleset to a coarser
+desired granularity.
+
+The [counters] section consists of a list of counters
+at the following format :
+<regexp> = <contribution> = <counter>
+The regexp can be anything that doesn't contain the =
+sign. The contribution has a fairly baroque but useful
+format where $ signs are interpreted to be replaced
+with that match in the regexp, after which the entire
+thing is interpreted as an int.
+The counter is just a name for the counter. It can be
+any string.
+So for example,
+   .*meditate.* = 1 = Meditate
+...will match any line containing the text 'meditate'
+and that will give a contribution of 1 to the
+'Meditate' counter, and
+   .*do (\d+) pushups.* = $1 = Pushups
+...will match any line containing a number of pushups
+and it will contribute for that number of pushups to
+the relevant counter, and
+   .*cheat (\d+) times = 1$1 = Cheat
+...will count 13 cheats for a line 'cheat 3 times'.
+
+The [markers] rules defines a list of markers at the
+following format :
+<regexp> = <policy> = <marker>
+The regexp can be anything that doesn't contain the
+'=' sign, and the marker can be any string.
+The policy must be either 'First', 'Last' or 'Each'.
+This defines what to do when multiple strings
+matching the regexp appear during a day. Respectively
+put the marker on the first, last of them, or on each
+of them.
+
+The [colors] section defines a color for an activity
+or marker in the output images. The format is :
+<name> = <color>
+...where name has to be the exact match (not a regexp
+so it's case sensitive even in a [colors/i] section)
+of an activity or marker name, and the color has to
+be any color that ImageMagick knows how to interpret,
+so typically a string at the '#FFFFFF' format or a
+color name from rgb.txt like 'white' or 'red'.
+Any counter or activity that doesn't have a color
+defined will get one randomly assigned (from a hash
+of it's name, so it's stable across invocations of
+the tool).
+
+The tool reads holidays from a 'holiday.rb' file.
+This is a Ruby file with self-explanatory syntax.
+
+The tool supports four modes.
+• Calendar mode
+  This mode produces a calendar-style output. The day
+  starts at 05:00 and ends at 29:00. Some counting
+  might be a bit strange if not sleeping at the time,
+  and the tool doesn't really make an effort to avoid
+  painting above or below the graph.
+  Each activity will be represented as a block of the
+  associated color on the calendar. Each marker will
+  be represented by a solid bar at the time it
+  happens. The tool will output a legend with the
+  name on the top and hours on the left, and the days
+  on the bottom with their weekday kanji for ease of
+  reading. Holidays are in red while worked days are
+  white. Below that, a legend will show the colors
+  for each activity and each marker. The tool spaces
+  these evenly but doesn't particularly avoid them
+  overlapping, so many activities/markers for short
+  calendars will be difficult to read.
+  This mode ignores counters.
+• Occupation mode
+  This mode produces a histogram with a bar for each
+  day and each activity. It uses the same legend
+  scheme as the Calendar mode to show days and
+  activities, but hours start at 0 from the bottom.
+  For each day, each activity gets a bar of the
+  relevant color with its size scaled to how much
+  time went into it, with the exact number on top of
+  the bar. Judicious use of collapses will make such
+  a graph more useful (a histogram with many
+  activites per day is very hard to read).
+  The total won't always add to 24h a day unless the
+  log indicates the same time of getting up every
+  day. This is because the tool will always count
+  sleep as ending the day, so if the log indicates
+  getting up at 07:00 the first day, 08:00 the
+  second day and 06:00 the third day, then the first
+  day lasts 25 hours and the second day 22.
+  This mode ignores counters and markers.
+• Stack mode
+  This is a very similar mode to occupation but it
+  will stack activities on top of each other instead
+  of lining them up horizontally. This makes some
+  comparisons of the time spent on a given activity
+  across time harder and others easier. The order
+  of stacking is alphabetical by activity and there
+  is currently no way to change that. Not all days
+  will have the same length for the same reasons the
+  histogram won't add up to 24 hours a day. This is
+  otherwise identical to the histogram mode.
+• Count mode
+  This will produce a text summary of the period in
+  the log (or the restricted period). It will show
+  on its standard output for each activity the total
+  time spent on it, and a breakdown per
+  workday/holiday, each with a total and an average.
+  It will then produce a summary of the counters,
+  ordered by name, by average time, by total time
+  and count.
+  This mode ignores the markers.
+
+Invocation is :
+graph.rb [options] file...
+
+file... can be any number of log files. They are
+searched in the local directory and under data/ if
+not found. The tool will also try to append the
+'.log' extension if a file with the specified name
+is not found. If all fails, an error is produced.
+
+Many options are supported to give different
+rules files, allow restricting the data periods
+read from the logs, help with debugging rules and
+offer one-shot harvesting of specific data without
+having to touch the rules files. See documentation
+at the top of graph.rb for details.
