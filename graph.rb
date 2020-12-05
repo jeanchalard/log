@@ -155,6 +155,9 @@ LogData = Struct.new(:days, :counters)
 CurrentCounter = Struct.new(:category, :startTime)
 
 def parsePeriod(period)
+  if (period.match?(/(\d\d)-?(\d\d)/))
+    period = period + "~" + period
+  end
   if (!period.include?('~')) then raise "Period must include ~ : ~06-12, 06-03~, or 06-03~06-12 (dashes optional)" end
   period = period.delete('-')
   period = '0101' + period if period[0] == '~'
