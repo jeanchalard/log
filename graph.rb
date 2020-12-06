@@ -355,13 +355,21 @@ def generateFooter(rules, categories, width, height)
     one = width.to_f / markers.length
     i = 0
     markers.each do |marker, policy|
-      hline(rvg, i * one + one / 6, 2.5 * FONT_SIZE, rules.color(marker))
+      # For some reason, ellipse() (used by hline) crashes when used with large numbers. Instead make a new
+      # image with the right coordinates so that the numbers passed to ellipse() are small.
+      rvg.use(hlineImg(rvg, i * one + one / 6, 2.5 * FONT_SIZE, rules.color(marker)), i * one + one / 6, 2.5 * FONT_SIZE)
       rvg.text(i * one + one / 3 + DAYWIDTH, 2.8 * FONT_SIZE, marker)
         .styles(:stroke => 'white', :fill => 'white', :stroke_opacity => 0.6, :fill_opacity => 0.6,
                 :font_family => 'Noto Sans CJK JP',
                 :text_anchor => 'start', :font_size => FONT_SIZE * 0.8, :font_weight => 100)
       i += 1
     end
+  end
+end
+
+def hlineImg(image, x, y, color)
+  Magick::RVG.new(DAYWIDTH, 6) do |rvg|
+    hline(rvg, 0, 3, color)
   end
 end
 
