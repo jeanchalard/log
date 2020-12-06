@@ -34,6 +34,7 @@ All section names can be suffixed with /i, which makes
 any regexps in the section case-insensitive ; though all
 sections support this, not all sections have regexps so
 it's not helpful for all sections.
+Any line starting with a # is considered a comment.
 
 A [general] section can define a name (defaults to
 "unnamed") and a mode among 'calendar', 'occupation',
@@ -72,6 +73,9 @@ The "Zzz" activity is special, it means sleep and the
 tool will merge sleep on this night with the sleep on
 the morning of the next day. Sleep can't be called
 anything else (at least if this processing is desired).
+In counters and histograms, sleep is counted as ending
+the day, not starting it, and will be reported as being
+part of the day it ends in graphs.
 
 The [collapse] section defines a list of collapses, at
 the following format :
@@ -208,3 +212,47 @@ read from the logs, help with debugging rules and
 offer one-shot harvesting of specific data without
 having to touch the rules files. See documentation
 at the top of graph.rb for details.
+
+
+An example rules file might look like :
+[general]
+name = my_calendar
+mode = calendar
+
+# Include my standard rules
+include standard.grc
+
+[rules/i]
+Youtube channel .* = Youtube
+Nap = Zzz
+Meeting (with|about) .* = Meeting
+Lunch with (Fred|Barney) = Rest
+Dinner (with (Fred|Barney)|at .*) = Rest
+
+[markers/i]
+.* = First = Get up
+Zzz.* = Last = Sleep
+.*Meditat(e|ion).* = Each = Meditate
+
+[colors]
+# Activities
+? = #3F3F3F
+Rest = #359330
+Work = #CF6D00
+Meeting = #BF6DB0
+Zzz = #003C71
+
+# Markers
+Get up = #00703C
+Sleep = #003C71
+Meditate = #CFCFCF
+
+[collapse]
+Facebook = Twitter = Social media
+Chat = Social media = Youtube = Rest
+WFH = Work
+
+[general]
+# File containing specific rules to collapse further,
+# only for calendar rule files.
+include collapse_calendar.grc

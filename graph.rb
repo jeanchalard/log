@@ -1,27 +1,38 @@
 #!/usr/bin/ruby
 
+# Invocation : graph.rb [options] datafile...
+#
 # -r <rules file> : e.g. -r calendar.grc to specify calendar.grc as a rule file.
 #                   rules files are searched in the current directory first, then in a rules/
 #                   directory if not found. The script also tries to affix the '.grc' extension
 #                   if no files with the specified name is found.
 #                   The default rules file name is 'calendar.grc'. Only one rules file name
-#                   can be specified, additional occurrences will be taken as file names.
+#                   can be specified, additional occurrences will be taken as data file names.
 #
-# -p <period> : e.g. 06-12~06-18 to specify a period to consider.
-#               Dashes are optional and only one of start/end may be specified, e.g. ~0611 or 08-14~ or 0102~03-31
+# -p <period> : specify a period to limit gathering data of data. Supported formats are :
+#               <date> gather only for this day, e.g. -p 06-12 for restricting to June 12.
+#               ~<date> gather up to this day, e.g. -p ~06-12 to restricting to dates up to June 12.
+#               <date>~ gather from this day, e.g. -p 06-12~ to restricting to dates starting June 12.
+#               <date>~<date> gather from this periode.g. 06-12~06-18 to specify June 12 to June 18.
+#               Dashes are optional in all dates, so 0612 and 06-12 are equivalent.
 #
-# -o <output base> : e.g. -r out to specify out as a base file name for output files (for modes with output files)
-#                    required if multiple files on the command line, otherwise this can be deduced of the input file name.
+# -o <output base> : e.g. -r out to specify out as a base file name for output files (for modes with
+#                    output files). If the current mode outputs files, this option is required when
+#                    multiple files are specified on the command line. If only one data file is
+#                    specified, this is deduced from the input file name but this option can be given
+#                    to override it.
 #
 # -d : show diagnostics. Still generates files as normal.
-#      This outputs every line with the rule it matched within its category, to check that the matched rule is the desired one.
-#      Output files are still generated (for modes that do).
+#      This outputs every line with the rule it matched within its category, to check that the
+#      matched rule is the desired one. Output files are still generated (for modes that do).
 #
-# -c <regexp> : count occurrences and time spent at <regexp>.
-#               Multiple -c args may be supplied.
+# -c <regexp> : count occurrences and time spent at <regexp>. Multiple -c args may be supplied.
+#               This is equivalent to adding the relevant rules under a [counters] section in
+#               the rules file.
 #
-# -s <collapse rule> : collapse given category into target category. Format is "Category = Target".
-#                      Multiple -s args can be given.
+# -s <collapse rule> : collapse given category into target category. Multiple -s args can be given.
+#                      Format is "Category = Category = ... = Target". This is equivalent to adding
+#                      the relevant rules under a [collapse] section in the rules file.
 
 require_relative 'rules'
 require_relative 'holidays'
