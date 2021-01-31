@@ -39,6 +39,8 @@ require_relative 'holidays'
 require 'fileutils'
 require 'rvg/rvg'
 
+YEAR = 2021
+
 DIAG = ARGV.include?("-d")
 ARGV.delete("-d") if DIAG
 
@@ -73,7 +75,7 @@ end
 
 def parseTime(time)
   return time if time.is_a? Numeric
-  raise "Time format error in #{ARGF.file.lineno} : #{time}" unless time.match(/[0-2][0-9][0-5][0-9]/)
+  raise "Time format error in #{ARGF.file.lineno} : #{time}" unless time.match(/[0-3][0-9][0-5][0-9]/)
   60 * time[0..1].to_i + time[2..3].to_i
 end
 
@@ -82,7 +84,7 @@ class Day
   attr_reader :date, :counters
   attr_accessor :sleepTime
   def initialize(date)
-    @date = Time.local(2020, date[0..1].to_i, date[3..4].to_i, 12, 0, 0)
+    @date = Time.local(YEAR, date[0..1].to_i, date[3..4].to_i, 12, 0, 0)
     @activities = []
     @counters = {}
     @markers = []
@@ -173,8 +175,8 @@ def parsePeriod(period)
   period = period.delete('-')
   period = '0101' + period if period[0] == '~'
   period = period + '1231' if period[-1] == '~'
-  from = Time.local(2020, period[0..1].to_i, period[2..3].to_i, 0, 0, 0)
-  to = Time.local(2020, period[5..6].to_i, period[7..8].to_i, 24, 0, 0)
+  from = Time.local(YEAR, period[0..1].to_i, period[2..3].to_i, 0, 0, 0)
+  to = Time.local(YEAR, period[5..6].to_i, period[7..8].to_i, 24, 0, 0)
   return [from, to]
 end
 
