@@ -19,6 +19,7 @@ FILES = {}
 PREFIXES = {}
 Dir["#{DIR}/*"].each do |f|
   m = f.match(/#{DIR}\/([^_]+)_(\d{8}_\d{4}).(jpg|png)/)
+  throw "Doesn't match regexp : #{f}" if (m.nil?)
   prefix = m[1]
   date = m[2]
   PREFIXES[prefix] = true

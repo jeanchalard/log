@@ -39,7 +39,7 @@ require_relative 'holidays'
 require 'fileutils'
 require 'rvg/rvg'
 
-YEAR = 2021
+DEFAULT_YEAR = 2021
 
 DIAG = ARGV.include?("-d")
 ARGV.delete("-d") if DIAG
@@ -83,8 +83,8 @@ class Day
   include Enumerable
   attr_reader :date, :counters
   attr_accessor :sleepTime
-  def initialize(date)
-    @date = Time.local(YEAR, date[0..1].to_i, date[3..4].to_i, 12, 0, 0)
+  def initialize(year, date)
+    @date = Time.local(year, date[0..1].to_i, date[3..4].to_i, 12, 0, 0)
     @activities = []
     @counters = {}
     @markers = []
@@ -166,99 +166,122 @@ end
 
 LogData = Struct.new(:days, :counters)
 CurrentCounter = Struct.new(:category, :startTime)
+AdhocDate = Struct.new(:date, :yearWasExplicit)
 
-def parsePeriod(period)
-  if (period.match?(/(\d\d)-?(\d\d)/))
+def parseAdhocDate(date, defaultYear)
+  m = date.match(/(\d\d\d\d)?(\d\d)(\d\d)/)
+  return AdhocDate.new(Time.local(if m[1].nil? then defaultYear else m[1].to_i end, m[2].to_i, m[3].to_i, 0, 0, 0), !m[1].nil?)
+end
+
+def parsePeriod(period, defaultYear)
+  if (period.match?(/(\d\d\d\d-)?(\d\d)-?(\d\d)/))
     period = period + "~" + period
   end
   if (!period.include?('~')) then raise "Period must include ~ : ~06-12, 06-03~, or 06-03~06-12 (dashes optional)" end
   period = period.delete('-')
   period = '0101' + period if period[0] == '~'
   period = period + '1231' if period[-1] == '~'
-  from = Time.local(YEAR, period[0..1].to_i, period[2..3].to_i, 0, 0, 0)
-  to = Time.local(YEAR, period[5..6].to_i, period[7..8].to_i, 24, 0, 0)
-  return [from, to]
+  period = period.split('~')
+  from = parseAdhocDate(period[0], defaultYear)
+  to = parseAdhocDate(period[1], defaultYear)
+  if (to.date < from.date)
+    if (!from.yearWasExplicit && to.yearWasExplicit)
+      from.date = Time.local(to.date.year - 1, from.date.month, from.date.day)
+    elsif (!to.yearWasExplicit)
+      # If neither were explicit (or from was) then take the default year for 'from' and move the 'to' one year forward
+      to.date = Time.local(from.date.year + 1, to.date.month, to.date.day)
+    end
+  end
+  to.date += 24 * 3600
+  puts "Selected period : #{from.date} ~ #{to.date}"
+  return [from.date, to.date]
 end
 
-def readData(rules)
+def readData(rules, year)
   day = nil
   counters = Counters.new
   currentCounters = []
   sleepTimes = []
   data = []
   seenActivities = {}
-  while l = gets
-    l.chomp!
-    if l.match(/\d\d-\d\d([  ]:.*)?/)
-      raise "Remaining currentCounter in line #{ARGF.file.lineno} : #{l}" unless currentCounters.empty?
-      day = Day.new(l)
-      if (day.date < PERIOD[0] || day.date > PERIOD[1])
-        day = 'ignored'
-      else
-        data << day
+  ARGV.each do |file|
+    m = file.match(/(\D|\A)(\d\d\d\d)\D/)
+    year = m[2].to_i unless m[2].nil?
+    puts "Parsing #{file} with year #{year}"
+    file = File.new(file)
+    while l = file.gets
+      l.chomp!
+      if l.match(/\d\d-\d\d([  ]:.*)?/)
+        raise "Remaining currentCounter in line #{ARGF.file.lineno} : #{l}" unless currentCounters.empty?
+        day = Day.new(year, l)
+        if (day.date < PERIOD[0] || day.date > PERIOD[1])
+          day = 'ignored'
+        else
+          data << day
+        end
+        next
+      elsif day == 'ignored'
+        next
+      elsif day.nil?
+        raise "Day unknown in #{ARGF.file.lineno} : #{l}"
       end
-      next
-    elsif day == 'ignored'
-      next
-    elsif day.nil?
-      raise "Day unknown in #{ARGF.file.lineno} : #{l}"
-    end
-    if !l.match(/\d{4} .*/)
+      if !l.match(/\d{4} .*/)
+        rules.matchCounter(l).each do |c|
+          counters.count(c[0], c[1], 0, l)
+        end
+        next
+      end
+
+      # Parse the line
+      time, *activity = l.split(' ')
+      parsedTime = parseTime(time)
+      activity = activity.join(' ')
+
+      # Manage counters
+      currentCounters.each do |current|
+        counters.count(current.category, 0, parsedTime - current.startTime, nil)
+      end
+      currentCounters = []
+      CHECKS.each do |check|
+        next unless Regexp.new(check).match(activity)
+        counters.count(check, 1, 0, activity)
+        currentCounters << CurrentCounter.new(check, parseTime(time))
+      end
       rules.matchCounter(l).each do |c|
         counters.count(c[0], c[1], 0, l)
+        currentCounters << CurrentCounter.new(c[0], parseTime(time))
       end
-      next
-    end
-
-    # Parse the line
-    time, *activity = l.split(' ')
-    parsedTime = parseTime(time)
-    activity = activity.join(' ')
-
-    # Manage counters
-    currentCounters.each do |current|
-      counters.count(current.category, 0, parsedTime - current.startTime, nil)
-    end
-    currentCounters = []
-    CHECKS.each do |check|
-      next unless Regexp.new(check).match(activity)
-      counters.count(check, 1, 0, activity)
-      currentCounters << CurrentCounter.new(check, parseTime(time))
-    end
-    rules.matchCounter(l).each do |c|
-      counters.count(c[0], c[1], 0, l)
-      currentCounters << CurrentCounter.new(c[0], parseTime(time))
-    end
-    if currentCounters.map {|c| c.category }.uniq.length != currentCounters.length
-      raise "Multiply-counted category in counters #{currentCounters}"
-    end
-
-    # Markers
-    rules.eachMarker(activity) do |m, policy|
-      case policy
-      when Marker::EACH
-        day.addMarker(time, m)
-      when Marker::FIRST
-        day.addMarker(time, m) unless day.findMarker(m)
-      when Marker::LAST
-        day.replaceMarker(time, m)
+      if currentCounters.map {|c| c.category }.uniq.length != currentCounters.length
+        raise "Multiply-counted category in counters #{currentCounters}"
       end
-    end
-    rule = rules.categorize(activity)
-    if rule.nil?
-      ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
-      category = "Error"
-    else
-      category = rule.category
-      if DIAG
-        if seenActivities.has_key?(activity)
-          seenActivities[activity] << ARGF.file.lineno
-        else
-          seenActivities[activity] = [rule, ARGF.file.lineno]
+
+      # Markers
+      rules.eachMarker(activity) do |m, policy|
+        case policy
+        when Marker::EACH
+          day.addMarker(time, m)
+        when Marker::FIRST
+          day.addMarker(time, m) unless day.findMarker(m)
+        when Marker::LAST
+          day.replaceMarker(time, m)
         end
       end
+      rule = rules.categorize(activity)
+      if rule.nil?
+        ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
+        category = "Error"
+      else
+        category = rule.category
+        if DIAG
+          if seenActivities.has_key?(activity)
+            seenActivities[activity] << ARGF.file.lineno
+          else
+            seenActivities[activity] = [rule, ARGF.file.lineno]
+          end
+        end
+      end
+      day.addActivity(time, category)
     end
-    day.addActivity(time, category)
   end
   prev = nil
   data.reverse_each do |d|
@@ -526,7 +549,9 @@ end
 def imageFilename(basename, specname)
   FileUtils.mkdir_p('out')
   FileUtils.mkdir_p("out/#{specname}")
-  "out/#{specname}/#{basename.downcase}.#{specname}.png"
+  f = "out/#{specname}/#{basename.downcase}.#{specname}.png"
+  puts "Output file : #{f}"
+  f
 end
 
 def searchInputFilePath(files)
@@ -540,7 +565,7 @@ def searchInputFilePath(files)
   end
 end
 
-PERIOD = parsePeriod(arg("-p", true) || '01-01~12-31')
+period = arg("-p", true) || '2000-01-01~2200-12-31'
 CHECKS = []
 while (check = arg("-c", true)) do
   CHECKS << check
@@ -560,10 +585,16 @@ if outArg.nil? && ARGV.length > 1 && rules.spec.mode != Rules::Spec::MODE_COUNT
   raise "Multiple files but no output name given"
 end
 BASENAME = outArg || File.basename(ARGV[0]).gsub(/.log$/, '')
+basenameMatch = BASENAME.match(/(\D|\A)(20\d\d)\D/)
+basenameMatch = ARGV[0].match(/(\D|\A)(20\d\d)\D/) if basenameMatch.nil?
+raise "Unable to deduce year" if (basenameMatch.nil?)
+year = basenameMatch[2]
+YEAR = if year.nil? then DEFAULT_YEAR else year end
+PERIOD = parsePeriod(period, YEAR)
 
 searchInputFilePath(ARGV)
 
-data = readData(rules)
+data = readData(rules, YEAR)
 if !ERRORS.empty?
   ERRORS.each do |e|
     puts e
