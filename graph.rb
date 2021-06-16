@@ -296,7 +296,7 @@ def readData(rules, year)
       categories = nil
       if rule.nil?
         ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
-        categories = Category.new("Error", 1.0)
+        categories = [Category.new("Error", 1.0)]
       else
         categories = rule.categories
         if DIAG
@@ -600,6 +600,7 @@ def searchInputFilePath(files)
 end
 
 def printCountOutputs(outputs)
+  outputs = outputs.sort {|a,b| b[0] <=> a[0]}.map {|x| x[1..-1]} # Sort by total time descending and throw total time out
   maxs = []
   outputs.each do |row|
     row.each_with_index do |e, i|
@@ -714,15 +715,14 @@ when Rules::Spec::MODE_COUNT
                   times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
                   times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
     end
-    outputs.sort! {|a,b| b[0] <=> a[0]} # Sort by total time
-    printCountOutputs(outputs.map {|x| x[1..-1]}) # ...but remove the numeric time from the output
+    printCountOutputs(outputs.map)
     puts
   end
 
   puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
   outputs = []
   totals.times.each do |category, times|
-    outputs << [category, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
+    outputs << [times.total, category, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
                 times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
                 times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
   end
