@@ -706,17 +706,19 @@ when Rules::Spec::MODE_OCCUPATIONS, Rules::Spec::MODE_STACK
 
 when Rules::Spec::MODE_COUNT
   totals = getTotals(categories, data.days)
-  puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
-  outputs = []
-  totals.detailedTimes.each do |activity, times|
-    outputs << [times.total, activity, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
-                times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
-                times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
+  if DIAG
+    puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
+    outputs = []
+    totals.detailedTimes.each do |activity, times|
+      outputs << [times.total, activity, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
+                  times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
+                  times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
+    end
+    outputs.sort! {|a,b| b[0] <=> a[0]} # Sort by total time
+    printCountOutputs(outputs.map {|x| x[1..-1]}) # ...but remove the numeric time from the output
+    puts
   end
-  outputs.sort! {|a,b| b[0] <=> a[0]} # Sort by total time
-  printCountOutputs(outputs.map {|x| x[1..-1]}) # ...but remove the numeric time from the output
 
-  puts
   puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
   outputs = []
   totals.times.each do |category, times|
