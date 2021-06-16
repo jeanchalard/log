@@ -274,9 +274,9 @@ def readData(rules, year)
         category = rule.category
         if DIAG
           if seenActivities.has_key?(activity)
-            seenActivities[activity] << ARGF.file.lineno
+            seenActivities[activity] << file.lineno
           else
-            seenActivities[activity] = [rule, ARGF.file.lineno]
+            seenActivities[activity] = [rule, file.lineno]
           end
         end
       end

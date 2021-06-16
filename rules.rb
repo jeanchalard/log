@@ -176,7 +176,7 @@ def readRulesInternal(filename)
           raise "Unrecognized marker in #{f.lineno} : #{l}"
         end
       when /rules/i
-        if l.match(/([^=]+) = ([^=]+)/)
+        if l.match(/(.+) = (.+)/)
           rules << Rule.new(Regexp.new("^" + $1 + "$", caseInsensitive), $2)
         else
           raise "Unrecognized rule in #{f.lineno} : #{l}"
