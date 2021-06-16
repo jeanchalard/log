@@ -103,20 +103,20 @@ class Day
     @markers.find {|q| q[1] == marker }
   end
   def getup
-    g = @activities.find {|a| a[1] != ZZZ }
+    g = @activities.find {|a| a[2] != ZZZ }
     if g then g[0] else nil end
   end
-  def addActivity(time, category, activity)
+  def addActivity(time, categories, activity)
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << [DAY_START, ZZZ, ZZZ]
+      @activities << [DAY_START, [Category.new(ZZZ, 1.0)], ZZZ]
     elsif (!@activities.empty? && time < @activities[-1][0])
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1][0]
     end
     if (@activities.empty? || @activities[-1][2] != activity) # If not the same as previous (otherwise, doing nothing will merge them)
-      @activities << [time, category, activity]
+      @activities << [time, categories, activity]
     end
   end
   def computeSleepBeforeGetup
@@ -127,7 +127,7 @@ class Day
   def computeSleepAfterGetup
     getup = self.getup || 0
     sleep = 0
-    each do |from, to, activity|
+    each do |from, to, categories, activity|
       sleep += to - from if from > getup && activity == ZZZ
     end
     sleep
@@ -135,7 +135,7 @@ class Day
   def getBucketedTime(category)
     return @sleepTime if category == ZZZ
     t = 0
-    self.each do |from, to, c|
+    self.each do |from, to, c, a|
       t += to - from if c == category
     end
     t
@@ -153,6 +153,22 @@ class Day
   end
   def each(&block)
     iter = @activities.zip(@activities[1..-1] + [[DAY_START + 24 * 60, '']]).map do |pair| [pair[0][0], pair[1][0], pair[0][1], pair[0][2]] end
+    elapsed = 0
+    endTime = iter[-1][1]
+    iter = iter.flat_map do |item|
+      # Attribute to each category the right proportion of time
+      from, to, categories, activity = *item
+      r = []
+      categories.each do |c|
+        time = ((to - from) * c.proportion).to_i
+        r << [from + elapsed, from + elapsed + time, c.name, activity]
+        elapsed += time
+      end
+      r
+    end
+    # As time is rounded off to the next int at each step there may be some small discrepancy at the end. Make sure the last
+    # end is endTime, which may attribute a small amount of extra time to the last activity, which is probably not too bad
+    iter[-1][1] = endTime
     iter.each do |act|
       yield(act[0], act[1], act[2], act[3])
     end
@@ -277,11 +293,12 @@ def readData(rules, year)
 
       # Categories
       rule = rules.categorize(activity)
+      categories = nil
       if rule.nil?
         ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
-        category = "Error"
+        categories = Category.new("Error", 1.0)
       else
-        category = rule.category
+        categories = rule.categories
         if DIAG
           if seenActivities.has_key?(activity)
             seenActivities[activity] << file.lineno
@@ -290,7 +307,7 @@ def readData(rules, year)
           end
         end
       end
-      day.addActivity(time, category, activity)
+      day.addActivity(time, categories, activity)
     end
   end
   prev = nil

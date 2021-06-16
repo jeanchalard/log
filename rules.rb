@@ -1,6 +1,7 @@
 #!/usr/bin/ruby -w
 
-Rule = Struct.new(:pattern, :category)
+Rule = Struct.new(:pattern, :categories)
+Category = Struct.new(:name, :proportion)
 
 class Counter
   attr_reader :pattern
@@ -40,11 +41,14 @@ class Rules
     @colors = colors
     @counters = counters
     @markers = markers
-    @rules = rules.map {|r|
-      dest = r.category
-      dest = collapse[dest] until collapse[dest].nil? || collapse[dest] == dest
-      if dest && dest != r.category then Rule.new(r.pattern, dest) else r end
-    }
+    rules.each do |r|
+      r.categories.each do |c|
+        dest = c.name
+        dest = collapse[dest] until collapse[dest].nil? || collapse[dest] == dest
+        c.name = dest unless dest.nil?
+      end
+    end
+    @rules = rules
   end
 
   def markers
@@ -177,7 +181,19 @@ def readRulesInternal(filename)
         end
       when /rules/i
         if l.match(/(.+) = (.+)/)
-          rules << Rule.new(Regexp.new("^" + $1 + "$", caseInsensitive), $2)
+          matcher = $1
+          category = $2
+          categoryList = category.scan(/(\d+% .*?)(?= \d+%|$)/)
+          categories = []
+          if categoryList.empty?
+            categories << Category.new(category, 1.0)
+          else
+            categoryList.each do |c|
+              c[0].match(/(\d+)% (.*)/)
+              categories << Category.new($2, $1.to_f / 100)
+            end
+          end
+          rules << Rule.new(Regexp.new("^" + matcher + "$", caseInsensitive), categories)
         else
           raise "Unrecognized rule in #{f.lineno} : #{l}"
         end
