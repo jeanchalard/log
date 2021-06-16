@@ -106,17 +106,17 @@ class Day
     g = @activities.find {|a| a[1] != ZZZ }
     if g then g[0] else nil end
   end
-  def addActivity(time, activity)
+  def addActivity(time, category, activity)
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << [DAY_START, ZZZ]
+      @activities << [DAY_START, ZZZ, ZZZ]
     elsif (!@activities.empty? && time < @activities[-1][0])
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1][0]
     end
-    if (@activities.empty? || @activities[-1][1] != activity) # If not the same as previous (otherwise, doing nothing will merge them)
-      @activities << [time, activity]
+    if (@activities.empty? || @activities[-1][2] != activity) # If not the same as previous (otherwise, doing nothing will merge them)
+      @activities << [time, category, activity]
     end
   end
   def computeSleepBeforeGetup
@@ -132,10 +132,18 @@ class Day
     end
     sleep
   end
-  def getBucketedTime(activity)
+  def getBucketedTime(category)
+    return @sleepTime if category == ZZZ
+    t = 0
+    self.each do |from, to, c|
+      t += to - from if c == category
+    end
+    t
+  end
+  def getExactTime(activity)
     return @sleepTime if activity == ZZZ
     t = 0
-    self.each do |from, to, a|
+    self.each do |from, to, c, a|
       t += to - from if a == activity
     end
     t
@@ -144,9 +152,9 @@ class Day
     @markers
   end
   def each(&block)
-    iter = @activities.zip(@activities[1..-1] + [[DAY_START + 24 * 60, '']]).map do |pair| [pair[0][0], pair[1][0], pair[0][1]] end
+    iter = @activities.zip(@activities[1..-1] + [[DAY_START + 24 * 60, '']]).map do |pair| [pair[0][0], pair[1][0], pair[0][1], pair[0][2]] end
     iter.each do |act|
-      yield(act[0], act[1], act[2])
+      yield(act[0], act[1], act[2], act[3])
     end
   end
   def to_s
@@ -266,6 +274,8 @@ def readData(rules, year)
           day.replaceMarker(time, m)
         end
       end
+
+      # Categories
       rule = rules.categorize(activity)
       if rule.nil?
         ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
@@ -280,7 +290,7 @@ def readData(rules, year)
           end
         end
       end
-      day.addActivity(time, category)
+      day.addActivity(time, category, activity)
     end
   end
   prev = nil
@@ -475,7 +485,7 @@ class Numeric
   end
 end
 class Totals
-  attr_accessor :workDays, :holidays, :times
+  attr_accessor :workDays, :holidays, :times, :detailedTimes
   class Times
     attr_accessor :workDays, :holidays
     def initialize
@@ -495,18 +505,18 @@ class Totals
       @holidays.to_hours_text
     end
   end
-  def initialize(categories)
+  def initialize
     @workDays = 0
     @holidays = 0
-    @times = {}
-    categories.each do |c| @times[c] = Times.new end
+    @times = Hash.new {|c, k| c[k] = Times.new }
+    @detailedTimes = Hash.new {|c, k| c[k] = Times.new }
   end
   def days
     @workDays + @holidays
   end
 end
 def getTotals(categories, data)
-  totals = Totals.new(categories)
+  totals = Totals.new
   data.each do |day|
     if day.holiday?
       totals.holidays += 1
@@ -518,6 +528,13 @@ def getTotals(categories, data)
         totals.times[c].holidays += day.getBucketedTime(c) || 0
       else
         totals.times[c].workDays += day.getBucketedTime(c) || 0
+      end
+    end
+    day.each do |from, to, c, a|
+      if day.holiday?
+        totals.detailedTimes[a].holidays += to - from
+      else
+        totals.detailedTimes[a].workDays += to - from
       end
     end
   end
@@ -562,6 +579,27 @@ def searchInputFilePath(files)
         break
       end
     end
+  end
+end
+
+def printCountOutputs(outputs)
+  maxs = []
+  outputs.each do |row|
+    row.each_with_index do |e, i|
+      if maxs[i].nil? || e.length > maxs[i] then maxs[i] = e.length end
+    end
+  end
+  outputs.each do |row|
+    row.each_with_index do |e, i|
+      if i == 0
+        row[i] = e.ljust(maxs[i])
+      else
+        row[i] = e.rjust(maxs[i])
+      end
+    end
+  end
+  outputs.each do |row|
+    puts "%s : %s (%s/d) (%s (%s/d) + %s (%s/d))" % row
   end
 end
 
@@ -653,29 +691,23 @@ when Rules::Spec::MODE_COUNT
   totals = getTotals(categories, data.days)
   puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
   outputs = []
+  totals.detailedTimes.each do |activity, times|
+    outputs << [times.total, activity, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
+                times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
+                times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
+  end
+  outputs.sort! {|a,b| b[0] <=> a[0]} # Sort by total time
+  printCountOutputs(outputs.map {|x| x[1..-1]}) # ...but remove the numeric time from the output
+
+  puts
+  puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
+  outputs = []
   totals.times.each do |category, times|
     outputs << [category, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
                 times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
                 times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
   end
-  maxs = []
-  outputs.each do |row|
-    row.each_with_index do |e, i|
-      if maxs[i].nil? || e.length > maxs[i] then maxs[i] = e.length end
-    end
-  end
-  outputs.each do |row|
-    row.each_with_index do |e, i|
-      if i == 0
-        row[i] = e.ljust(maxs[i])
-      else
-        row[i] = e.rjust(maxs[i])
-      end
-    end
-  end
-  outputs.each do |row|
-    puts "%s : %s (%s/d) (%s (%s/d) + %s (%s/d))" % row
-  end
+  printCountOutputs(outputs)
 end
 
 unless data.counters.empty?

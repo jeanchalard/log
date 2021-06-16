@@ -46,4 +46,46 @@ HOLIDAYS = [
   '2021-05-03', # 憲法記念日
   '2021-05-04', # みどりの日
   '2021-05-05', # こどもの日
+
+  '2021-05-17', # Vacances
+  '2021-05-18', # Vacances
+  '2021-05-19', # Vacances
+  '2021-05-20', # Vacances
+  '2021-05-21', # Vacances
+
+  '2021-05-24', # Vacances
+  '2021-05-25', # Vacances
+  '2021-05-26', # Vacances
+  '2021-05-27', # Vacances
+  '2021-05-28', # Google-wide
+
+  '2021-05-31', # Vacances
+  '2021-06-01', # Vacances
+  '2021-06-02', # Vacances
+  '2021-06-03', # Vacances
+  '2021-06-04', # Vacances
+
+  '2021-06-07', # Vacances
+  '2021-06-08', # Vacances
+  '2021-06-09', # Vacances
+  '2021-06-10', # Vacances
+  '2021-06-11', # Vacances
+
+  '2021-06-14', # Vacances
+  '2021-06-15', # Vacances
+  '2021-06-16', # Vacances
+  '2021-06-17', # Vacances
+  '2021-06-18', # Vacances
+
+  '2021-06-21', # Vacances
+  '2021-06-22', # Vacances
+  '2021-06-23', # Vacances
+  '2021-06-24', # Vacances
+  '2021-06-25', # Vacances
+
+  '2021-06-28', # Vacances
+  '2021-06-29', # Vacances
+  '2021-06-30', # Vacances
+  '2021-07-01', # Vacances
+  '2021-07-02', # Vacances
 ]
