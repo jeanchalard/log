@@ -188,10 +188,13 @@ def readRulesInternal(filename)
           if categoryList.empty?
             categories << Category.new(category, 1.0)
           else
+            total = 0
             categoryList.each do |c|
               c[0].match(/(\d+)% (.*)/)
+              total += $1.to_i
               categories << Category.new($2, $1.to_f / 100)
             end
+            raise "Doesn't add up to 100% : #{l}" if total != 100
           end
           rules << Rule.new(Regexp.new("^" + matcher + "$", caseInsensitive), categories)
         else
