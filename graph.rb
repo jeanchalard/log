@@ -153,22 +153,21 @@ class Day
   end
   def each(&block)
     iter = @activities.zip(@activities[1..-1] + [[DAY_START + 24 * 60, '']]).map do |pair| [pair[0][0], pair[1][0], pair[0][1], pair[0][2]] end
-    elapsed = 0
-    endTime = iter[-1][1]
     iter = iter.flat_map do |item|
       # Attribute to each category the right proportion of time
       from, to, categories, activity = *item
       r = []
+      elapsed = 0
       categories.each do |c|
         time = ((to - from) * c.proportion).to_i
         r << [from + elapsed, from + elapsed + time, c.name, activity]
         elapsed += time
       end
+      # As time is rounded off to the next int at each step there may be some small discrepancy at the end. Make sure the last
+      # end is to, which may attribute a small amount of extra time to the last activity, which is probably not too bad
+      r[-1][1] = to
       r
     end
-    # As time is rounded off to the next int at each step there may be some small discrepancy at the end. Make sure the last
-    # end is endTime, which may attribute a small amount of extra time to the last activity, which is probably not too bad
-    iter[-1][1] = endTime
     iter.each do |act|
       yield(act[0], act[1], act[2], act[3])
     end
