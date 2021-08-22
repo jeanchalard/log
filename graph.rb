@@ -57,6 +57,7 @@ BASE_DAYWIDTH = 40
 HOURHEIGHT = 25
 MINUTE_HEIGHT = HOURHEIGHT.to_f / 60
 FONT_SIZE = 18
+ACTIVITY_OPACITY = 0.6
 
 DAY_START = 5 * 60
 
@@ -318,10 +319,12 @@ def readData(rules, year)
     rAct = {}
     seenActivities.each do |activity, contents|
       rule = contents[0]
-      if rAct.has_key? rule.category
-        rAct[rule.category] << activity
-      else
-        rAct[rule.category] = [activity]
+      rule.categories.each do |category|
+        if rAct.has_key? category
+          rAct[category] << activity
+        else
+          rAct[category] = [activity]
+        end
       end
     end
     rAct.each do |category, activities|
@@ -383,15 +386,22 @@ def generateBottomRule(width, height, data)
 end
 
 def generateLegend(rules, activities, width, height)
-  one = width.to_f / activities.length
+  colors = Hash.new
+  rules.colors.map do |activity, color|
+    next unless activities.include?(activity)
+    colors[activity] = color
+  end
+  activities.each do |activity|
+    colors[activity] = rules.color(activity) unless colors.has_key?(activity)
+  end
+  one = width.to_f / colors.length
   Magick::RVG.new(width, height) do |rvg|
     i = 0
-    activities.map do |activity|
-      color = rules.color(activity)
+    colors.map do |activity, color|
       group = rvg.rvg(one, FONT_SIZE, i * one, 0)
-      group.rect(one * 2 / 3, FONT_SIZE, one / 6, 0).styles(:fill => color, :fill_opacity => 0.8)
+      group.rect(one * 5 / 6, FONT_SIZE, one / 12, 0).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY)
       group.text(one / 2, FONT_SIZE * 0.8, activity)
-        .styles(:stroke => 'black', :fill => 'black', :stroke_opacity => 0.6, :fill_opacity => 0.6,
+        .styles(:stroke => 'white', :fill => 'white', :stroke_opacity => 0.6, :fill_opacity => 1,
                 :font_family => 'Noto Sans CJK JP',
                 :text_anchor => 'middle', :font_size => FONT_SIZE * 0.8, :font_weight => 100)
       i += 1
@@ -440,7 +450,7 @@ def generateDay(rules, day, width, height)
     from = toY(from, height)
     to = toY(to, height)
     color = rules.color(activity)
-    image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => 0.4, :stroke_width => 0)
+    image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY, :stroke_width => 0)
   rescue => e
     puts "#{e} : #{day.date} #{from} #{to} #{activity}"
   end

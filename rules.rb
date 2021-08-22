@@ -34,7 +34,7 @@ class Rules
     MODE_STACK = 4
   end
 
-  attr_reader :spec
+  attr_reader :spec, :colors
 
   def initialize(spec, colors, counters, markers, rules, collapse)
     @spec = spec
