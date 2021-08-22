@@ -88,4 +88,7 @@ HOLIDAYS = [
   '2021-06-30', # Vacances
   '2021-07-01', # Vacances
   '2021-07-02', # Vacances
+
+  '2021-07-22', # 海の日
+  '2021-07-23', # Férié jeux olympiques
 ]
