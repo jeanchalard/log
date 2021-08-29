@@ -2,6 +2,7 @@
 
 Rule = Struct.new(:pattern, :categories)
 Category = Struct.new(:name, :proportion)
+LocalRandom = Random.new(1)
 
 class Counter
   attr_reader :pattern
@@ -28,10 +29,16 @@ end
 
 class Rules
   class Spec < Struct.new(:name, :mode)
+    # Image modes
     MODE_CALENDAR = 1
     MODE_OCCUPATIONS = 2
     MODE_COUNT = 3
     MODE_STACK = 4
+    # Interactive modes
+    MODE_INTERACTIVE = 5
+  end
+  def self.isImageMode(mode)
+    return mode < Spec::MODE_INTERACTIVE
   end
 
   attr_reader :spec, :colors
@@ -49,6 +56,12 @@ class Rules
       end
     end
     @rules = rules
+  end
+
+  def generateColors(activities)
+    activities.each do |activity|
+      @colors[activity] = "#%06X" % (LocalRandom.rand * 65536) unless @colors.has_key?(activity)
+    end
   end
 
   def markers
@@ -75,10 +88,6 @@ class Rules
       return rule if rule.pattern.match(activity)
     end
     nil
-  end
-
-  def color(key)
-    @colors[key]
   end
 end
 
@@ -109,6 +118,7 @@ class String
     when 'occupation' then Rules::Spec::MODE_OCCUPATIONS
     when 'stack' then Rules::Spec::MODE_STACK
     when 'count' then Rules::Spec::MODE_COUNT
+    when 'interactive' then Rules::Spec::MODE_INTERACTIVE
     end
   end
 end
@@ -123,8 +133,7 @@ end
 def readRulesInternal(filename)
   mode = nil
   spec = Rules::Spec.new("unnamed", Rules::Spec::MODE_CALENDAR)
-  localRandom = Random.new(1)
-  colors = Hash.new {|h,k| h[k] = "#%06X" % (localRandom.rand * 65536) }
+  colors = {}
   counters = []
   markers = []
   rules = []

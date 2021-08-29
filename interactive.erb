@@ -1,0 +1,202 @@
+<html><head><style>
+
+/* Constants */
+:root {
+  --general-margin : 10px;
+  --min-day-width : 30px;
+  --hover-background : #303030D0;
+}
+
+/* Sanity */
+* {
+  color : white;
+  margin : 0px;
+  box-sizing : border-box;
+  scrollbar-width : thin;
+  font-family : "Noto Sans";
+}
+
+/* Magic scrollbar incantations */
+*::-webkit-scrollbar { width : 12px; height : 12px; }
+::-webkit-scrollbar-track { background: #101010; border-radius: 12px; }
+::-webkit-scrollbar-thumb { border-radius: 12px; background: #3F3F3F; border : 2px solid #101010; }
+::-webkit-scrollbar-thumb:hover { background: #4F4F4F; }
+
+@font-face {
+  font-family : "Noto Sans";
+  font-style : normal;
+  font-weight : 100;
+  src : local("Noto Sans CJK JP Medium");
+}
+
+/* Take 1 screen height */
+html {
+  background-color : black;
+  height 100vh;
+}
+body {
+  height : 100%;
+  padding : var(--general-margin);
+  display : flex; flex-direction : column;
+}
+
+/* Tools */
+.rows { display : flex; flex-direction : column; }
+.columns { display : flex; flex-direction : row; }
+.weight1 { flex : 1 1 auto; }
+.marginLR { margin-left : var(--general-margin); margin-right : var(--general-margin); }
+
+/* Day legend */
+.holiday { color : #FFAFAF; }
+.weekday { color : white; }
+.dayLegend {
+  margin-top : calc(var(--general-margin) / 2);
+  margin-bottom : calc(var(--general-margin) / 2);
+  flex : 0 0 auto;
+}
+
+/* Footer */
+.footer {
+  width : 100%;
+  margin-top : calc(var(--general-margin) / 2);
+  flex : 0 1 auto;
+  display : flex;
+}
+
+/* Grid data setup */
+.contents {
+  flex : 1 1 auto;
+  margin-bottom : calc(var(--general-margin) / 2);
+}
+
+.gridData {
+  border : 1px solid white;
+  flex : 1 1 auto;
+  overflow-x : scroll;
+}
+
+.grid {
+  flex : 1 1 auto; display : flex;
+  width : 100%; height : 100%;
+}
+
+/* Hour legend */
+.hourLegends {
+  flex : 1 1 auto;
+  margin-right : calc(var(--general-margin));
+}
+.hourLegend {
+  flex : 1 1 auto;
+  text-align : center;
+}
+.verticalCenter {
+  position : relative;
+  top : 50%; left : 50%;
+  transform : translateX(-50%) translateY(-50%);
+}
+.gridHourSolid {
+  flex : 1 1 auto;
+  border-bottom : 1px solid rgba(255, 255, 255, 0.3);
+}
+.gridHourDashed {
+  flex : 1 1 auto;
+  border-bottom : 1px dashed rgba(255, 255, 255, 0.3);
+}
+
+.data {
+  display : flex; flex-direction : row;
+  flex : 1 1 auto;
+  width : 100%; height : 100%;
+}
+
+/* Day data */
+.day {
+  min-width : var(--min-day-width);
+  flex : 1 1 auto;
+}
+.separatorLeft {
+  border-left : 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Activity colors */
+<% rules.colors.each do |activity, color| %>
+.activity_<%= activity.htmlize() %> {
+  opacity : <%= Math.sqrt(kACTIVITY_OPACITY) %>;
+  background-color : <%= color %>;
+}
+<% end %>
+
+/* On hover activity info */
+.activity { position : relative; }
+.activity:hover {
+  border : 1px solid rgba(255, 255, 255, 0.9);
+  position : relative;
+  z-index : 1
+}
+.activity .hover {
+  visibility : hidden;
+}
+.activity:hover .hover {
+  visibility : visible;
+}
+.activityInfo {
+  position : absolute;
+  left : -50%; top : calc(100% + 10px);
+  min-width : 100px;
+  text-align : center;
+  background-color : #1F1F1F;
+  z-index : 1;
+  border-radius : 4px;
+  padding : 3px;
+}
+
+</style></head><body>
+<div class="contents columns">
+  <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
+    <div class="hourLegends rows" style="position : relative;">
+      <% 12.times do |i| %>
+      <div class="hourLegend"><p class="verticalCenter"><%= "%02i" % (i * 2 + 6) %></p></div>
+      <% end %>
+    </div>
+    <div class="dayLegend" style="overflow-x : scroll; visibility : hidden;"> <!-- take the same space as the real dayLegend -->
+      <center class="day">00<br/>月</center>
+    </div>
+  </div>
+  <div class="gridData rows">
+    <div style="position : relative; flex : 1 1 auto; width : 100%;">
+      <div class="grid rows" style="position : absolute; top : 0px; left : 0px;">
+        <% 11.times do |i| %>
+        <div class="gridHourSolid"></div>
+        <div class="gridHourDashed"></div>
+        <% end %>
+        <div class="gridHourSolid"></div>
+        <div class="gridHourDashed" style="border-bottom : 0px;"></div>
+      </div>
+      <div class="data columns" style="position : absolute; top : 0px; left : 0px;">
+        <% data.days.each_with_index do |day, index| %>
+        <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
+          <% day.each do |from, to, activity| %>
+          <div class="activity activity_<%= activity.htmlize() %>" style="flex : <%= to - from %> 1 auto;">
+            <span class="activityInfo hover"><%= activity %></span>
+          </div>
+          <% end %>
+        </div>
+        <% end %>
+      </div>
+    </div>
+    <div class="dayLegend columns">
+      <% data.days.each do |day| %>
+      <center class="day <%= if day.holiday? then 'holiday' else 'weekday' end %>">
+        <%= "%02i<br/>%s" % [day.date.day, kDOW[day.date.wday]] %>
+      </center>
+      <% end %>
+    </div>
+  </div>
+</div>
+<div class="footer columns">
+<% rules.colors.map do |activity, color| %>
+  <% next unless categories.include?(activity) %>
+  <center class="activity_<%= activity.htmlize() %> weight1 marginLR"><%= activity %></center>
+<% end %>
+</div>
+</body></html>

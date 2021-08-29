@@ -38,6 +38,7 @@ require_relative 'rules'
 require_relative 'holidays'
 require 'fileutils'
 require 'rvg/rvg'
+require 'erb'
 
 DEFAULT_YEAR = 2021
 
@@ -71,6 +72,12 @@ end
 class Float
   def to_hours_text
     self.to_i.to_hours_text + ("%.2f" % (self % 1).round(2))[1..-1]
+  end
+end
+
+class String
+  def htmlize
+    gsub('?', '__').gsub(/[\?!!@$%&\^\*\(\)\+=,\.\/';:"<>\[\]\\{}\|`#]/) {|x| "\\%X" % x.ord }
   end
 end
 
@@ -418,7 +425,7 @@ def generateFooter(rules, categories, width, height)
     markers.each do |marker, policy|
       # For some reason, ellipse() (used by hline) crashes when used with large numbers. Instead make a new
       # image with the right coordinates so that the numbers passed to ellipse() are small.
-      rvg.use(hlineImg(rvg, i * one + one / 6, 2.5 * FONT_SIZE, rules.color(marker)), i * one + one / 6, 2.5 * FONT_SIZE)
+      rvg.use(hlineImg(rvg, i * one + one / 6, 2.5 * FONT_SIZE, rules.colors[marker]), i * one + one / 6, 2.5 * FONT_SIZE)
       rvg.text(i * one + one / 3 + DAYWIDTH, 2.8 * FONT_SIZE, marker)
         .styles(:stroke => 'white', :fill => 'white', :stroke_opacity => 0.6, :fill_opacity => 0.6,
                 :font_family => 'Noto Sans CJK JP',
@@ -449,7 +456,7 @@ def generateDay(rules, day, width, height)
   day.each do |from, to, activity|
     from = toY(from, height)
     to = toY(to, height)
-    color = rules.color(activity)
+    color = rules.colors[activity]
     image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY, :stroke_width => 0)
   rescue => e
     puts "#{e} : #{day.date} #{from} #{to} #{activity}"
@@ -457,7 +464,7 @@ def generateDay(rules, day, width, height)
 
   day.markers.each do |marker|
     time, activity = *marker
-    hline(image, 0, toY(time, height), rules.color(activity))
+    hline(image, 0, toY(time, height), rules.colors[activity])
   end
 
   image
@@ -468,7 +475,7 @@ def generateDayHistogram(rules, categories, day, width, height)
   x = 0
   w = width / categories.size
   categories.each do |activity|
-    color = rules.color(activity)
+    color = rules.colors[activity]
     minutes = day.getBucketedTime(activity)
     unless minutes.nil?
       h = minutes * MINUTE_HEIGHT
@@ -493,7 +500,7 @@ def generateDayStack(rules, categories, day, width, height)
   y = 0
   w = width
   categories.each do |activity|
-    color = rules.color(activity)
+    color = rules.colors[activity]
     minutes = day.getBucketedTime(activity)
     unless minutes.nil?
       h = minutes * MINUTE_HEIGHT
@@ -589,12 +596,20 @@ def arg(arg, takesArg)
   end
 end
 
-def imageFilename(basename, specname)
+def filename(basename, specname, extension)
   FileUtils.mkdir_p('out')
   FileUtils.mkdir_p("out/#{specname}")
-  f = "out/#{specname}/#{basename.downcase}.#{specname}.png"
+  f = "out/#{specname}/#{basename.downcase}.#{specname}.#{extension}"
   puts "Output file : #{f}"
   f
+end
+
+def imageFilename(basename, specname)
+  filename(basename, specname, "png")
+end
+
+def htmlFilename(basename, specname)
+  filename(basename, specname, "html")
 end
 
 def searchInputFilePath(files)
@@ -678,18 +693,21 @@ if !ERRORS.empty?
 end
 
 categories = data.days.flat_map do |day| day.map do |startTime, endTime, category| category end end.uniq.sort
+rules.generateColors(categories)
 
-DAYWIDTH = if Rules::Spec::MODE_OCCUPATIONS == rules.spec.mode then 2 * BASE_DAYWIDTH else BASE_DAYWIDTH end
-height = 24 * HOURHEIGHT
-imageWidth = LEGEND_WIDTH + DAYWIDTH * data.days.length
-imageHeight = TITLE_HEIGHT + height + BOTTOMRULE_HEIGHT + FOOTER_HEIGHT
-image = Magick::RVG.new(imageWidth + RIGHT_MARGIN, imageHeight)
-image.background_fill = 'black'
+if (Rules.isImageMode(rules.spec.mode))
+  DAYWIDTH = if Rules::Spec::MODE_OCCUPATIONS == rules.spec.mode then 2 * BASE_DAYWIDTH else BASE_DAYWIDTH end
+  height = 24 * HOURHEIGHT
+  imageWidth = LEGEND_WIDTH + DAYWIDTH * data.days.length
+  imageHeight = TITLE_HEIGHT + height + BOTTOMRULE_HEIGHT + FOOTER_HEIGHT
+  image = Magick::RVG.new(imageWidth + RIGHT_MARGIN, imageHeight)
+  image.background_fill = 'black'
 
-image.use(generateTitle(imageWidth, TITLE_HEIGHT), imageWidth / 2, TITLE_HEIGHT / 2, imageWidth, TITLE_HEIGHT)
-image.use(generateBottomRule(imageWidth, BOTTOMRULE_HEIGHT, data.days), LEGEND_WIDTH, BOTTOMRULE_HEIGHT + height)
+  image.use(generateTitle(imageWidth, TITLE_HEIGHT), imageWidth / 2, TITLE_HEIGHT / 2, imageWidth, TITLE_HEIGHT)
+  image.use(generateBottomRule(imageWidth, BOTTOMRULE_HEIGHT, data.days), LEGEND_WIDTH, BOTTOMRULE_HEIGHT + height)
 
-image.use(generateRuledBackground(imageWidth, height, data.days, rules.spec.mode), 0, TITLE_HEIGHT)
+  image.use(generateRuledBackground(imageWidth, height, data.days, rules.spec.mode), 0, TITLE_HEIGHT)
+end
 
 case rules.spec.mode
 when Rules::Spec::MODE_CALENDAR
@@ -736,6 +754,16 @@ when Rules::Spec::MODE_COUNT
                 times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
   end
   printCountOutputs(outputs)
+
+when Rules::Spec::MODE_INTERACTIVE
+  output = File.write(htmlFilename(BASENAME, rules.spec.name),
+                      ERB.new(File.read('interactive.erb')).result_with_hash(
+                        :data => data,
+                        :rules => rules,
+                        :categories => categories,
+                        :kDOW => DOW,
+                        :kACTIVITY_OPACITY => ACTIVITY_OPACITY
+                      ))
 end
 
 unless data.counters.empty?
