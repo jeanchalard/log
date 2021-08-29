@@ -87,6 +87,14 @@ def parseTime(time)
   60 * time[0..1].to_i + time[2..3].to_i
 end
 
+class Activity
+  attr_reader :time, :categories, :activity
+  def initialize(startTime, categories, activity)
+    @time = startTime
+    @categories = categories
+    @activity = activity
+  end
+end
 class Day
   include Enumerable
   attr_reader :date, :counters
@@ -111,20 +119,20 @@ class Day
     @markers.find {|q| q[1] == marker }
   end
   def getup
-    g = @activities.find {|a| a[2] != ZZZ }
-    if g then g[0] else nil end
+    g = @activities.find {|a| a.activity != ZZZ }
+    if g then g.time else nil end
   end
   def addActivity(time, categories, activity)
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << [DAY_START, [Category.new(ZZZ, 1.0)], ZZZ]
-    elsif (!@activities.empty? && time < @activities[-1][0])
+      @activities << Activity.new(DAY_START, [Category.new(ZZZ, 1.0)], ZZZ)
+    elsif (!@activities.empty? && time < @activities[-1].time)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
-      time = @activities[-1][0]
+      time = @activities[-1].time
     end
-    if (@activities.empty? || @activities[-1][2] != activity) # If not the same as previous (otherwise, doing nothing will merge them)
-      @activities << [time, categories, activity]
+    if (@activities.empty? || @activities[-1].activity != activity) # If not the same as previous (otherwise, doing nothing will merge them)
+      @activities << Activity.new(time, categories, activity)
     end
   end
   def computeSleepBeforeGetup
@@ -160,7 +168,7 @@ class Day
     @markers
   end
   def each(&block)
-    iter = @activities.zip(@activities[1..-1] + [[DAY_START + 24 * 60, '']]).map do |pair| [pair[0][0], pair[1][0], pair[0][1], pair[0][2]] end
+    iter = @activities.zip(@activities[1..-1] + [Activity.new(DAY_START + 24 * 60, '', '')]).map do |pair| [pair[0].time, pair[1].time, pair[0].categories, pair[0].activity] end
     iter = iter.flat_map do |item|
       # Attribute to each category the right proportion of time
       from, to, categories, activity = *item
