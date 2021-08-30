@@ -88,11 +88,15 @@ def parseTime(time)
 end
 
 class Activity
-  attr_reader :time, :endTime, :categories, :activity
-  def initialize(startTime, categories, activity)
-    @time = startTime
-    @categories = categories
+  attr_reader :startTime, :endTime, :categories, :activity
+
+  def initialize(activity, startTime, endTime, categories)
+    raise "Can't have multiple categories with a set endTime" if ((categories.is_a? Array) && (!endTime.nil?))
+    raise "Can't have a nil endTime with a single category" if ((!categories.is_a? Array) && (endTime.nil?))
     @activity = activity
+    @startTime = startTime
+    @endTime = endTime
+    @categories = categories
   end
   def endTime=(endTime)
     raise "Endtime already set in #{self} : #{@endTime}" if !@endTime.nil?
@@ -114,6 +118,7 @@ class Day
     @activities = []
     @counters = {}
     @markers = []
+    @closed = false
   end
   def holiday?
     @date.wday == 0 || @date.wday >= 6 || HOLIDAYS.include?(@date.strftime("%Y-%m-%d"))
@@ -130,20 +135,20 @@ class Day
   end
   def getup
     g = @activities.find {|a| a.activity != ZZZ }
-    if g then g.time else nil end
+    if g then g.startTime else nil end
   end
   def addActivity(time, categories, activity)
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << Activity.new(DAY_START, [Category.new(ZZZ, 1.0)], ZZZ)
-    elsif (!@activities.empty? && time < @activities[-1].time)
+      @activities << Activity.new(ZZZ, DAY_START, nil, [Category.new(ZZZ, 1.0)])
+    elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].time
     end
     @activities[-1].endTime = time unless @activities.empty?
     if (@activities.empty? || @activities[-1].activity != activity) # If not the same as previous (otherwise, doing nothing will merge them)
-      @activities << Activity.new(time, categories, activity)
+      @activities << Activity.new(activity, time, nil, categories)
     end
   end
   def computeSleepBeforeGetup
@@ -178,23 +183,28 @@ class Day
   def markers
     @markers
   end
-  def each(&block)
-    iter = @activities.flat_map do |activity|
-      # Attribute to each category the right proportion of time
-      r = []
-      elapsed = 0
-      activity.categories.each do |c|
-        time = ((activity.endTime - activity.time) * c.proportion).to_i
-        r << [activity.time + elapsed, activity.time + elapsed + time, c.name, activity.activity]
-        elapsed += time
+  def close
+    activities = []
+    to = DAY_START + 24 * 60
+    @activities.reverse_each do |multiActi|
+      from = multiActi.startTime
+      duration = to - from
+      multiActi.categories.to_enum.with_index.reverse_each do |category, index|
+        # As time is rounded off to the next int at each step there may be some small discrepancy at the final step of
+        # the iteration (index == 0). Make sure the activity starts at the time it was indicated, which may attribute
+        # a small amount of extra time to that activity, which is probably not an issue
+        from = if index == 0 then multiActi.startTime else (to - duration * category.proportion).to_i end
+        activities << Activity.new(multiActi.activity, from, to, category.name)
+        to = from
       end
-      # As time is rounded off to the next int at each step there may be some small discrepancy at the end. Make sure the last
-      # end is to, which may attribute a small amount of extra time to the last activity, which is probably not too bad
-      r[-1][1] = activity.endTime
-      r
     end
-    iter.each do |act|
-      yield(act[0], act[1], act[2], act[3])
+    @activities = activities.reverse
+    @closed = true
+  end
+  def each(&block)
+    raise "Day not closed" unless @closed
+    @activities.each do |act|
+      yield(act.startTime, act.endTime, act.categories, act.activity)
     end
   end
   def to_s
@@ -336,6 +346,7 @@ def readData(rules, year)
   end
   prev = nil
   data.reverse_each do |d|
+    d.close
     d.sleepTime = if prev.nil? then nil else d.computeSleepAfterGetup + prev.computeSleepBeforeGetup end
     prev = d
   end
@@ -470,13 +481,13 @@ def generateDay(rules, day, width, height)
 
   image = Magick::RVG.new(width, height)
 
-  day.each do |from, to, activity|
+  day.each do |from, to, category|
     from = toY(from, height)
     to = toY(to, height)
-    color = rules.colors[activity]
+    color = rules.colors[category]
     image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY, :stroke_width => 0)
   rescue => e
-    puts "#{e} : #{day.date} #{from} #{to} #{activity}"
+    puts "#{e} : #{day.date} #{from} #{to} #{category}"
   end
 
   day.markers.each do |marker|
