@@ -106,7 +106,7 @@ class Activity
     if @endTime.nil? then DAY_START + 24 * 60 else @endTime end
   end
   def to_s
-    "Activity{#{@activity}[#{@categories}]}#{@time.to_hours_text}~#{self.endTime.to_hours_text}}"
+    "Activity{#{@activity}[#{@categories}]}#{@startTime.to_hours_text}~#{self.endTime.to_hours_text}}"
   end
 end
 class Day
@@ -159,24 +159,24 @@ class Day
   def computeSleepAfterGetup
     getup = self.getup || 0
     sleep = 0
-    each do |from, to, categories, activity|
-      sleep += to - from if from > getup && activity == ZZZ
+    each do |activity|
+      sleep += activity.endTime - activity.startTime if activity.startTime > getup && activity.activity == ZZZ
     end
     sleep
   end
   def getBucketedTime(category)
     return @sleepTime if category == ZZZ
     t = 0
-    self.each do |from, to, c, a|
-      t += to - from if c == category
+    self.each do |a|
+      t += a.endTime - a.startTime if a.categories == category
     end
     t
   end
   def getExactTime(activity)
     return @sleepTime if activity == ZZZ
     t = 0
-    self.each do |from, to, c, a|
-      t += to - from if a == activity
+    self.each do |a|
+      t += a.endTime - a.startTime if a.activity == activity
     end
     t
   end
@@ -203,9 +203,7 @@ class Day
   end
   def each(&block)
     raise "Day not closed" unless @closed
-    @activities.each do |act|
-      yield(act.startTime, act.endTime, act.categories, act.activity)
-    end
+    @activities.each(&block)
   end
   def to_s
     "Day #{@date}\n" + @activities.map do |a| "%02i%02i %s" % [a[0] / 60, a[0] % 60, a[1]] end.join("\n")
@@ -481,13 +479,13 @@ def generateDay(rules, day, width, height)
 
   image = Magick::RVG.new(width, height)
 
-  day.each do |from, to, category|
-    from = toY(from, height)
-    to = toY(to, height)
-    color = rules.colors[category]
+  day.each do |activity|
+    from = toY(activity.startTime, height)
+    to = toY(activity.endTime, height)
+    color = rules.colors[activity.categories]
     image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY, :stroke_width => 0)
   rescue => e
-    puts "#{e} : #{day.date} #{from} #{to} #{category}"
+    puts "#{e} : #{day.date} #{activity}"
   end
 
   day.markers.each do |marker|
@@ -591,11 +589,11 @@ def getTotals(categories, data)
         totals.times[c].workDays += day.getBucketedTime(c) || 0
       end
     end
-    day.each do |from, to, c, a|
+    day.each do |a|
       if day.holiday?
-        totals.detailedTimes[a].holidays += to - from
+        totals.detailedTimes[a.activity].holidays += a.endTime - a.startTime
       else
-        totals.detailedTimes[a].workDays += to - from
+        totals.detailedTimes[a.activity].workDays += a.endTime - a.startTime
       end
     end
   end
@@ -720,7 +718,7 @@ if !ERRORS.empty?
   raise "Fix the above errors"
 end
 
-categories = data.days.flat_map do |day| day.map do |startTime, endTime, category| category end end.uniq.sort
+categories = data.days.flat_map do |day| day.map do |a| a.categories end end.uniq.sort
 rules.generateColors(categories)
 
 if (Rules.isImageMode(rules.spec.mode))

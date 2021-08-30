@@ -119,8 +119,8 @@ body {
 }
 
 /* Activity colors */
-<% rules.colors.each do |activity, color| %>
-.activity_<%= activity.htmlize() %> {
+<% rules.colors.each do |category, color| %>
+.activity_<%= category.htmlize() %> {
   opacity : <%= Math.sqrt(kACTIVITY_OPACITY) %>;
   background-color : <%= color %>;
 }
@@ -142,12 +142,12 @@ body {
 .activityInfo {
   position : absolute;
   left : -50%; top : calc(100% + 10px);
-  min-width : 100px;
   text-align : center;
   background-color : #1F1F1F;
   z-index : 1;
   border-radius : 4px;
   padding : 3px;
+  white-space : nowrap;
 }
 
 </style></head><body>
@@ -175,9 +175,12 @@ body {
       <div class="data columns" style="position : absolute; top : 0px; left : 0px;">
         <% data.days.each_with_index do |day, index| %>
         <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
-          <% day.each do |from, to, activity| %>
-          <div class="activity activity_<%= activity.htmlize() %>" style="flex : <%= to - from %> 1 auto;">
-            <span class="activityInfo hover"><%= activity %></span>
+          <% day.each do |activity| %>
+          <div class="activity activity_<%= activity.categories.htmlize() %>" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;">
+            <div class="activityInfo hover">
+              <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %> [<%= activity.categories %>]<br/>
+              <%= activity.activity %>
+            </div>
           </div>
           <% end %>
         </div>
