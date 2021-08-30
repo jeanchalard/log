@@ -88,11 +88,21 @@ def parseTime(time)
 end
 
 class Activity
-  attr_reader :time, :categories, :activity
+  attr_reader :time, :endTime, :categories, :activity
   def initialize(startTime, categories, activity)
     @time = startTime
     @categories = categories
     @activity = activity
+  end
+  def endTime=(endTime)
+    raise "Endtime already set in #{self} : #{@endTime}" if !@endTime.nil?
+    @endTime = endTime
+  end
+  def endTime
+    if @endTime.nil? then DAY_START + 24 * 60 else @endTime end
+  end
+  def to_s
+    "Activity{#{@activity}[#{@categories}]}#{@time.to_hours_text}~#{self.endTime.to_hours_text}}"
   end
 end
 class Day
@@ -131,6 +141,7 @@ class Day
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].time
     end
+    @activities[-1].endTime = time unless @activities.empty?
     if (@activities.empty? || @activities[-1].activity != activity) # If not the same as previous (otherwise, doing nothing will merge them)
       @activities << Activity.new(time, categories, activity)
     end
@@ -168,20 +179,18 @@ class Day
     @markers
   end
   def each(&block)
-    iter = @activities.zip(@activities[1..-1] + [Activity.new(DAY_START + 24 * 60, '', '')]).map do |pair| [pair[0].time, pair[1].time, pair[0].categories, pair[0].activity] end
-    iter = iter.flat_map do |item|
+    iter = @activities.flat_map do |activity|
       # Attribute to each category the right proportion of time
-      from, to, categories, activity = *item
       r = []
       elapsed = 0
-      categories.each do |c|
-        time = ((to - from) * c.proportion).to_i
-        r << [from + elapsed, from + elapsed + time, c.name, activity]
+      activity.categories.each do |c|
+        time = ((activity.endTime - activity.time) * c.proportion).to_i
+        r << [activity.time + elapsed, activity.time + elapsed + time, c.name, activity.activity]
         elapsed += time
       end
       # As time is rounded off to the next int at each step there may be some small discrepancy at the end. Make sure the last
       # end is to, which may attribute a small amount of extra time to the last activity, which is probably not too bad
-      r[-1][1] = to
+      r[-1][1] = activity.endTime
       r
     end
     iter.each do |act|
