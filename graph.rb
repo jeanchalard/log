@@ -144,7 +144,7 @@ class Day
       @activities << Activity.new(ZZZ, DAY_START, nil, [Category.new(ZZZ, 1.0)])
     elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
-      time = @activities[-1].time
+      time = @activities[-1].startTime
     end
     @activities[-1].endTime = time unless @activities.empty?
     if (@activities.empty? || @activities[-1].activity != activity) # If not the same as previous (otherwise, doing nothing will merge them)
