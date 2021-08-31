@@ -1,4 +1,32 @@
-<html><head><style>
+<html><head><script>
+var lastHoverElement = null;
+function hover(event, element) {
+  const tooltip = document.getElementById("tooltip");
+  if (null == element) {
+    if (null != lastHoverElement) lastHoverElement.style.outline = "none";
+    lastHoverElement = null;
+    tooltip.style.display = "none";
+    return;
+  }
+  tooltip.style.display = "block";
+  const parentPos = element.getBoundingClientRect();
+
+  tooltip.innerHTML = element.innerHTML;
+  tooltip.querySelector(".activityInfo").style.display = "block";
+
+  // Center the tooltip
+  const tooltipSize = tooltip.getBoundingClientRect();
+  const tooltipWidth = tooltipSize.right - tooltipSize.left;
+  var x = ((parentPos.left + parentPos.right - tooltipWidth) / 2);
+  x = Math.max(5, x);
+  x = Math.min(window.innerWidth - tooltipWidth - 5, x);
+  tooltip.style.left = x + "px";
+  tooltip.style.top = (event.clientY + 20) + "px";
+
+  element.style.outline = "1px solid rgba(255, 255, 255, 0.9)";
+  lastHoverElement = element;
+}
+</script><style>
 
 /* Constants */
 :root {
@@ -126,31 +154,24 @@ body {
 }
 <% end %>
 
-/* On hover activity info */
-.activity { position : relative; }
-.activity:hover {
-  border : 1px solid rgba(255, 255, 255, 0.9);
-  position : relative;
-  z-index : 1
-}
-.activity .hover {
-  visibility : hidden;
-}
-.activity:hover .hover {
-  visibility : visible;
-}
-.activityInfo {
+/* On tooltip */
+#tooltip {
   position : absolute;
-  left : -50%; top : calc(100% + 10px);
   text-align : center;
   background-color : #1F1F1F;
-  z-index : 1;
+  z-index : 100;
   border-radius : 4px;
   padding : 3px 6px 3px 6px; /* top right bottom left */
   white-space : nowrap;
+  cursor : none;
+  opacity : 0.8;
+}
+.activityInfo {
+  display : none;
 }
 
 </style></head><body>
+<div id="tooltip"></div>
 <div class="contents columns">
   <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
     <div class="hourLegends rows" style="position : relative;">
@@ -176,8 +197,8 @@ body {
         <% data.days.each_with_index do |day, index| %>
         <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
           <% day.each do |activity| %>
-          <div class="activity activity_<%= activity.categories.htmlize() %>" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;">
-            <div class="activityInfo hover">
+          <div class="activity activity_<%= activity.categories.htmlize() %>" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;" onmousemove="hover(event, this)" onmouseout="hover(event, null)">
+            <div class="activityInfo">
               <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %> [<%= activity.categories %>]<br/>
               <%= activity.activity %>
             </div>
