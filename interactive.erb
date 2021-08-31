@@ -1,5 +1,5 @@
 <html><head><script>
-var lastHoverElement = null;
+let lastHoverElement = null;
 function hover(event, element) {
   const tooltip = document.getElementById("tooltip");
   if (null == element) {
@@ -17,7 +17,7 @@ function hover(event, element) {
   // Center the tooltip
   const tooltipSize = tooltip.getBoundingClientRect();
   const tooltipWidth = tooltipSize.right - tooltipSize.left;
-  var x = ((parentPos.left + parentPos.right - tooltipWidth) / 2);
+  let x = ((parentPos.left + parentPos.right - tooltipWidth) / 2);
   x = Math.max(5, x);
   x = Math.min(window.innerWidth - tooltipWidth - 5, x);
   tooltip.style.left = x + "px";
