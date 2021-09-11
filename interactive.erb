@@ -147,10 +147,13 @@ body {
 }
 
 /* Activity colors */
-<% rules.colors.each do |category, color| %>
-.activity_<%= category.htmlize() %> {
+.activity {
   opacity : <%= Math.sqrt(kACTIVITY_OPACITY) %>;
-  background-color : <%= color %>;
+}
+
+<% categories.each do |category| %>
+.color_<%= category.htmlize %> {
+  background-color : <%= rules.categoryColor(category) %>;
 }
 <% end %>
 
@@ -197,7 +200,8 @@ body {
         <% data.days.each_with_index do |day, index| %>
         <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
           <% day.each do |activity| %>
-          <div class="activity activity_<%= activity.categories.htmlize() %>" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;" onmousemove="hover(event, this)" onmouseout="hover(event, null)">
+          <div class="activity color_<%= activity.categories.htmlize() %> activity_<%= activity.categories.htmlize() %>"
+               style="flex : <%= activity.endTime - activity.startTime %> 1 auto;" onmousemove="hover(event, this)" onmouseout="hover(event, null)">
             <div class="activityInfo">
               <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %> [<%= activity.categories %>]<br/>
               <%= activity.activity %>
@@ -218,9 +222,10 @@ body {
   </div>
 </div>
 <div class="footer columns">
+<% c = categories.map {|x| x.name } %>
 <% rules.colors.map do |activity, color| %>
-  <% next unless categories.include?(activity) %>
-  <center class="activity_<%= activity.htmlize() %> weight1 marginLR"><%= activity %></center>
+  <% next unless c.include?(activity) %>
+  <center class="color_<%= activity.htmlize() %> weight1 marginLR"><%= activity %></center>
 <% end %>
 </div>
 </body></html>

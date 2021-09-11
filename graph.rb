@@ -48,6 +48,7 @@ ARGV.delete("-d") if DIAG
 ERRORS = []
 
 ZZZ = 'Zzz'
+ZZZCAT = Category.new(ZZZ, nil)
 
 LEGEND_WIDTH = 50
 RIGHT_MARGIN = 10
@@ -77,7 +78,19 @@ end
 
 class String
   def htmlize
-    gsub('?', '__').gsub(/[\?!!@$%&\^\*\(\)\+=,\.\/';:"<>\[\]\\{}\|`#]/) {|x| "\\%X" % x.ord }
+    gsub('?', '__').gsub(/[\?!!@$%&\^\*\(\)\+=,\.\/';:"<>\[\]\\{}\|`# ]/) {|x| "__%X" % x.ord }
+  end
+end
+class Category
+  def htmlize
+    self.name.htmlize
+  end
+  def to_s
+    if self.parent.nil?
+      name
+    else
+      "#{name}, #{self.parent.to_s}"
+    end
   end
 end
 
@@ -91,8 +104,19 @@ class Activity
   attr_reader :startTime, :endTime, :categories, :activity
 
   def initialize(activity, startTime, endTime, categories)
-    raise "Can't have multiple categories with a set endTime" if ((categories.is_a? Array) && (!endTime.nil?))
-    raise "Can't have a nil endTime with a single category" if ((!categories.is_a? Array) && (endTime.nil?))
+    if endTime.nil?
+      # If endTime is nil, the code is in the parsing phase where the end time is not yet known and
+      # categories is an array of WeightedObj(String, Float) because they've just only been parsed.
+      # Check this.
+      raise "During parsing when endTime is not known, |categories| must be an array" unless categories.is_a? Array
+      categories.each do |c|
+        raise "During parsing when endTime is not known, each category must be a WeightedObj(Category, Float) (is #{c})" unless (c.is_a?(WeightedObj) && c.obj.is_a?(Category))
+      end
+    else
+      # If endTime is non-nil, the code is in the closing phase of the day where each line is getting its
+      # end time and being split into one item for each of the weighted categories.
+      raise "During closing when endTime is known, |categories| must be a single Category object" unless categories.is_a? Category
+    end
     @activity = activity
     @startTime = startTime
     @endTime = endTime
@@ -141,7 +165,7 @@ class Day
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << Activity.new(ZZZ, DAY_START, nil, [WeightedObj.new(ZZZ, 1.0)])
+      @activities << Activity.new(ZZZ, DAY_START, nil, [WeightedObj.new(ZZZCAT, 1.0)])
     elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].startTime
@@ -165,7 +189,7 @@ class Day
     sleep
   end
   def getBucketedTime(category)
-    return @sleepTime if category == ZZZ
+    return @sleepTime if category.name == ZZZ
     t = 0
     self.each do |a|
       t += a.endTime - a.startTime if a.categories == category
@@ -418,14 +442,12 @@ def generateBottomRule(width, height, data)
   scale
 end
 
-def generateLegend(rules, activities, width, height)
-  colors = Hash.new
+def generateLegend(rules, categories, width, height)
+  colors = {}
+  c = categories.map {|x| x.name }
   rules.colors.map do |activity, color|
-    next unless activities.include?(activity)
+    next unless c.include?(activity)
     colors[activity] = color
-  end
-  activities.each do |activity|
-    colors[activity] = rules.color(activity) unless colors.has_key?(activity)
   end
   one = width.to_f / colors.length
   Magick::RVG.new(width, height) do |rvg|
@@ -482,7 +504,7 @@ def generateDay(rules, day, width, height)
   day.each do |activity|
     from = toY(activity.startTime, height)
     to = toY(activity.endTime, height)
-    color = rules.colors[activity.categories]
+    color = rules.categoryColor(activity.categories)
     image.rect(DAYWIDTH, to - from, 0, from).styles(:fill => color, :fill_opacity => ACTIVITY_OPACITY, :stroke_width => 0)
   rescue => e
     puts "#{e} : #{day.date} #{activity}"
@@ -598,14 +620,14 @@ def getTotals(categories, data)
     end
   end
   if data.first.holiday?
-    totals.times[ZZZ].holidays += data.first.computeSleepBeforeGetup
+    totals.times[ZZZCAT].holidays += data.first.computeSleepBeforeGetup
   else
-    totals.times[ZZZ].workDays += data.first.computeSleepBeforeGetup
+    totals.times[ZZZCAT].workDays += data.first.computeSleepBeforeGetup
   end
   if data.last.holiday?
-    totals.times[ZZZ].holidays += data.last.computeSleepAfterGetup
+    totals.times[ZZZCAT].holidays += data.last.computeSleepAfterGetup
   else
-    totals.times[ZZZ].workDays += data.last.computeSleepAfterGetup
+    totals.times[ZZZCAT].workDays += data.last.computeSleepAfterGetup
   end
   totals
 end
@@ -718,7 +740,7 @@ if !ERRORS.empty?
   raise "Fix the above errors"
 end
 
-categories = data.days.flat_map do |day| day.map do |a| a.categories end end.uniq.sort
+categories = data.days.flat_map do |day| day.flat_map do |a| a.categories.hierarchy end end.uniq.sort
 rules.generateColors(categories)
 
 if (Rules.isImageMode(rules.spec.mode))
@@ -775,7 +797,7 @@ when Rules::Spec::MODE_COUNT
   puts "Total days : #{totals.days} (#{totals.workDays} work + #{totals.holidays} holidays)"
   outputs = []
   totals.times.each do |category, times|
-    outputs << [times.total, category, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
+    outputs << [times.total, category.name, times.total_s, (times.total.to_f.zdiv totals.days).to_hours_text,
                 times.workDays_s, (times.workDays.to_f.zdiv totals.workDays).to_hours_text,
                 times.holidays_s, (times.holidays.to_f.zdiv totals.holidays).to_hours_text]
   end

@@ -3,6 +3,18 @@
 Rule = Struct.new(:pattern, :categories)
 WeightedObj = Struct.new(:obj, :weight)
 LocalRandom = Random.new(1)
+class Category < Struct.new(:name, :parent)
+  def <=>(other)
+    name <=> other.name
+  end
+  def hierarchy
+    if parent.nil?
+      [self]
+    else
+      [self] + parent.hierarchy
+    end
+  end
+end
 
 class Counter
   attr_reader :pattern
@@ -48,19 +60,47 @@ class Rules
     @colors = colors
     @counters = counters
     @markers = markers
+    categories = rules.flat_map {|r| r.categories.map {|c| c.obj } }.uniq
+    cache = { nil => nil }
+    categories = categories.map {|c| getCategory(c, collapse, cache) }
     rules.each do |r|
       r.categories.each do |c|
-        dest = c.obj
-        dest = collapse[dest] until collapse[dest].nil? || collapse[dest] == dest
-        c.obj = dest unless dest.nil?
+        c.obj = cache[c.obj]
       end
     end
     @rules = rules
   end
 
-  def generateColors(activities)
-    activities.each do |activity|
-      @colors[activity] = "#%06X" % (LocalRandom.rand * 65536) unless @colors.has_key?(activity)
+  def getCategory(c, collapse, cache)
+    if cache.has_key?(c) # nil is seeded to nil in the cache
+      cache[c]
+    else
+      cache[c] = Category.new(c, getCategory(collapse[c], collapse, cache))
+      cache[c]
+    end
+  end
+  private :getCategory
+
+  def generateColors(categories)
+    categories.each do |category|
+      next if @colors.has_key? category.name
+      color = categoryColor(category)
+      # Generate a color only for those activities that don't find one recursively.
+      # If they have one recursively it will be looked up at generation time with
+      # categoryColor. This is essential to distinguish what must be displayed in
+      # the legend, because a category that gets its color from its parent should
+      # not be shown in the legend.
+      @colors[category.name] = "#%06X" % (LocalRandom.rand * 65536) if color.nil?
+    end
+  end
+
+  def categoryColor(category)
+    if category.nil?
+      nil
+    elsif @colors.has_key? category.name
+      @colors[category.name]
+    else
+      categoryColor(category.parent)
     end
   end
 
