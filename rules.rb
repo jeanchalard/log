@@ -1,7 +1,7 @@
 #!/usr/bin/ruby -w
 
 Rule = Struct.new(:pattern, :categories)
-Category = Struct.new(:name, :proportion)
+WeightedObj = Struct.new(:obj, :weight)
 LocalRandom = Random.new(1)
 
 class Counter
@@ -50,9 +50,9 @@ class Rules
     @markers = markers
     rules.each do |r|
       r.categories.each do |c|
-        dest = c.name
+        dest = c.obj
         dest = collapse[dest] until collapse[dest].nil? || collapse[dest] == dest
-        c.name = dest unless dest.nil?
+        c.obj = dest unless dest.nil?
       end
     end
     @rules = rules
@@ -195,13 +195,13 @@ def readRulesInternal(filename)
           categoryList = category.scan(/(\d+% .*?)(?= \d+%|$)/)
           categories = []
           if categoryList.empty?
-            categories << Category.new(category, 1.0)
+            categories << WeightedObj.new(category, 1.0)
           else
             total = 0
             categoryList.each do |c|
               c[0].match(/(\d+)% (.*)/)
               total += $1.to_i
-              categories << Category.new($2, $1.to_f / 100)
+              categories << WeightedObj.new($2, $1.to_f / 100)
             end
             raise "Doesn't add up to 100% : #{l}" if total != 100
           end

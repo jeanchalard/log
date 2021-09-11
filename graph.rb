@@ -141,7 +141,7 @@ class Day
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << Activity.new(ZZZ, DAY_START, nil, [Category.new(ZZZ, 1.0)])
+      @activities << Activity.new(ZZZ, DAY_START, nil, [WeightedObj.new(ZZZ, 1.0)])
     elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].startTime
@@ -193,8 +193,8 @@ class Day
         # As time is rounded off to the next int at each step there may be some small discrepancy at the final step of
         # the iteration (index == 0). Make sure the activity starts at the time it was indicated, which may attribute
         # a small amount of extra time to that activity, which is probably not an issue
-        from = if index == 0 then multiActi.startTime else (to - duration * category.proportion).to_i end
-        activities << Activity.new(multiActi.activity, from, to, category.name)
+        from = if index == 0 then multiActi.startTime else (to - duration * category.weight).to_i end
+        activities << Activity.new(multiActi.activity, from, to, category.obj)
         to = from
       end
     end
@@ -328,7 +328,7 @@ def readData(rules, year)
       categories = nil
       if rule.nil?
         ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
-        categories = [Category.new("Error", 1.0)]
+        categories = [WeightedObj.new("Error", 1.0)]
       else
         categories = rule.categories
         if DIAG
