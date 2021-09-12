@@ -91,6 +91,14 @@ body {
   display : flex;
 }
 
+/* Details header */
+#details {
+  min-height : 100px;
+  width : 100%;
+  display : flex;
+  margin : 8px;
+}
+
 /* Grid data setup */
 .contents {
   flex : 1 1 auto;
@@ -173,8 +181,21 @@ body {
   display : none;
 }
 
+.infoBox {
+  background-color : #101030;
+  border-radius : 10px;
+  border : 2px solid white;
+  padding : 5px;
+}
+
 </style></head><body>
 <div id="tooltip"></div>
+<div id="details" class="columns">
+  <div class="infoBox">
+    <p>Repos</p>
+    <p>Total time : 3h10</p>
+  </div>
+</div>
 <div class="contents columns">
   <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
     <div class="hourLegends rows" style="position : relative;">
