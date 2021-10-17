@@ -41,7 +41,7 @@ def generate(date)
   y = 0
   width = files.max {|a,b| a.columns <=> b.columns }.columns
   height = files.sum {|f| f.rows }
-  img = Image.new(width, height) { self.background_color = 'black' }
+  img = Image.new(width, height) {|image| image.background_color = 'black' }
   files.each do |file|
     w = file.columns
     x = (width - w) / 2
