@@ -250,7 +250,7 @@ body {
                <p><%= activity.activity %></p>
               </div>
               <% activity.categories.each_parent do |c| %>
-                <div class="color_<%= activity.categories.htmlize() %> infoBox">
+                <div class="color_<%= c.htmlize() %> infoBox">
                   <p><%= c %></p>
                 </div>
               <% end %>
