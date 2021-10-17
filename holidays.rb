@@ -91,4 +91,17 @@ HOLIDAYS = [
 
   '2021-07-22', # 海の日
   '2021-07-23', # Férié jeux olympiques
+
+  '2021-08-09', # Lundi après 山の日
+  '2021-08-11', # Vaccin, pris la journée au cas où
+
+  '2021-09-13', # Parapente
+
+  '2021-09-20', # Vacances
+  '2021-09-21', # Vacances
+  '2021-09-22', # Vacances
+  '2021-09-23', # Vacances
+  '2021-09-24', # Vacances
+
+  '2021-10-08', # Cours de massage
 ]
