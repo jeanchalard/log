@@ -14,6 +14,10 @@ class Category < Struct.new(:name, :parent)
       [self] + parent.hierarchy
     end
   end
+  def each_parent(&block)
+    block.call(name)
+    parent.each_parent(&block) unless parent.nil?
+  end
 end
 
 class Counter

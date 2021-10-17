@@ -49,6 +49,7 @@ ERRORS = []
 
 ZZZ = 'Zzz'
 ZZZCAT = Category.new(ZZZ, nil)
+ERRORCAT = Category.new("Error", nil)
 
 LEGEND_WIDTH = 50
 RIGHT_MARGIN = 10
@@ -254,7 +255,7 @@ def parseAdhocDate(date, defaultYear)
 end
 
 def parsePeriod(period, defaultYear)
-  if (period.match?(/(\d\d\d\d-)?(\d\d)-?(\d\d)/))
+  if (period.match?(/^(\d\d\d\d-)?(\d\d)-?(\d\d)$/))
     period = period + "~" + period
   end
   if (!period.include?('~')) then raise "Period must include ~ : ~06-12, 06-03~, or 06-03~06-12 (dashes optional)" end
@@ -352,7 +353,7 @@ def readData(rules, year)
       categories = nil
       if rule.nil?
         ERRORS << "Unknown category for day #{"%02i" % day.date.month}-#{"%02i" % day.date.day} line #{ARGF.file.lineno} : #{activity}"
-        categories = [WeightedObj.new("Error", 1.0)]
+        categories = [WeightedObj.new(ERRORCAT, 1.0)]
       else
         categories = rule.categories
         if DIAG

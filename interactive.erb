@@ -1,4 +1,5 @@
 <html><head><script>
+let pinnedElement = null;
 let lastHoverElement = null;
 function hover(event, element) {
   const tooltip = document.getElementById("tooltip");
@@ -11,8 +12,9 @@ function hover(event, element) {
   tooltip.style.display = "block";
   const parentPos = element.getBoundingClientRect();
 
-  tooltip.innerHTML = element.innerHTML;
-  tooltip.querySelector(".activityInfo").style.display = "block";
+  let source = element.querySelector(".activityInfo");
+  tooltip.innerHTML = source.innerHTML;
+  tooltip.style.display = "block";
 
   // Center the tooltip
   const tooltipSize = tooltip.getBoundingClientRect();
@@ -25,6 +27,19 @@ function hover(event, element) {
 
   element.style.outline = "1px solid rgba(255, 255, 255, 0.9)";
   lastHoverElement = element;
+
+  if (null == pinnedElement) infoBox(element);
+}
+
+function bigre(event, element) {
+  pinnedElement = element;
+  infoBox(element);
+}
+
+function infoBox(element) {
+  let infoBox = document.getElementById("details");
+  let source = element.querySelector(".categoryInfo");
+  infoBox.innerHTML = source.innerHTML;
 }
 </script><style>
 
@@ -145,6 +160,16 @@ body {
   width : 100%; height : 100%;
 }
 
+/* Details infoboxes */
+.infoBox {
+  border-radius : 10px;
+  border : 2px solid white;
+  padding : 5px;
+  margin : 5px;
+  flex : 0 0 auto;
+  width : 200px;
+}
+
 /* Day data */
 .day {
   min-width : var(--min-day-width);
@@ -180,21 +205,13 @@ body {
 .activityInfo {
   display : none;
 }
-
-.infoBox {
-  background-color : #101030;
-  border-radius : 10px;
-  border : 2px solid white;
-  padding : 5px;
+.categoryInfo {
+  display : none;
 }
 
 </style></head><body>
 <div id="tooltip"></div>
 <div id="details" class="columns">
-  <div class="infoBox">
-    <p>Repos</p>
-    <p>Total time : 3h10</p>
-  </div>
 </div>
 <div class="contents columns">
   <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
@@ -222,10 +239,21 @@ body {
         <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
           <% day.each do |activity| %>
           <div class="activity color_<%= activity.categories.htmlize() %> activity_<%= activity.categories.htmlize() %>"
-               style="flex : <%= activity.endTime - activity.startTime %> 1 auto;" onmousemove="hover(event, this)" onmouseout="hover(event, null)">
+               style="flex : <%= activity.endTime - activity.startTime %> 1 auto;"
+               onmousemove="hover(event, this)" onmouseout="hover(event, null)" onclick="bigre(this, this)">
             <div class="activityInfo">
               <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %> [<%= activity.categories %>]<br/>
               <%= activity.activity %>
+            </div>
+            <div class="categoryInfo">
+              <div class="infoBox">
+               <p><%= activity.activity %></p>
+              </div>
+              <% activity.categories.each_parent do |c| %>
+                <div class="color_<%= activity.categories.htmlize() %> infoBox">
+                  <p><%= c %></p>
+                </div>
+              <% end %>
             </div>
           </div>
           <% end %>
