@@ -104,23 +104,14 @@ end
 class Activity
   attr_reader :startTime, :endTime, :categories, :activity
 
-  def initialize(activity, startTime, endTime, categories)
-    if endTime.nil?
-      # If endTime is nil, the code is in the parsing phase where the end time is not yet known and
-      # categories is an array of WeightedObj(String, Float) because they've just only been parsed.
-      # Check this.
-      raise "During parsing when endTime is not known, |categories| must be an array" unless categories.is_a? Array
-      categories.each do |c|
-        raise "During parsing when endTime is not known, each category must be a WeightedObj(Category, Float) (is #{c})" unless (c.is_a?(WeightedObj) && c.obj.is_a?(Category))
-      end
-    else
-      # If endTime is non-nil, the code is in the closing phase of the day where each line is getting its
-      # end time and being split into one item for each of the weighted categories.
-      raise "During closing when endTime is known, |categories| must be a single Category object" unless categories.is_a? Category
+  def initialize(activity, startTime, categories)
+    raise "|categories| must be an array" unless categories.is_a? Array
+    categories.each do |c|
+      raise "Each category must be a WeightedObj(Category, Float) (is #{c.inspect})" unless (c.is_a?(WeightedObj) && c.obj.is_a?(Category))
     end
     @activity = activity
     @startTime = startTime
-    @endTime = endTime
+    @endTime = nil
     @categories = categories
   end
   def endTime=(endTime)
@@ -166,14 +157,14 @@ class Day
     time = parseTime(time)
     time = DAY_START if time < DAY_START
     if (@activities.empty? && time > DAY_START)
-      @activities << Activity.new(ZZZ, DAY_START, nil, [WeightedObj.new(ZZZCAT, 1.0)])
+      @activities << Activity.new(ZZZ, DAY_START, [WeightedObj.new(ZZZCAT, 1.0)])
     elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].startTime
     end
     @activities[-1].endTime = time unless @activities.empty?
     if (@activities.empty? || @activities[-1].activity != activity) # If not the same as previous (otherwise, doing nothing will merge them)
-      @activities << Activity.new(activity, time, nil, categories)
+      @activities << Activity.new(activity, time, categories)
     end
   end
   def computeSleepBeforeGetup
@@ -209,21 +200,7 @@ class Day
     @markers
   end
   def close
-    activities = []
-    to = DAY_START + 24 * 60
-    @activities.reverse_each do |multiActi|
-      from = multiActi.startTime
-      duration = to - from
-      multiActi.categories.to_enum.with_index.reverse_each do |category, index|
-        # As time is rounded off to the next int at each step there may be some small discrepancy at the final step of
-        # the iteration (index == 0). Make sure the activity starts at the time it was indicated, which may attribute
-        # a small amount of extra time to that activity, which is probably not an issue
-        from = if index == 0 then multiActi.startTime else (to - duration * category.weight).to_i end
-        activities << Activity.new(multiActi.activity, from, to, category.obj)
-        to = from
-      end
-    end
-    @activities = activities.reverse
+    @activities[-1].endTime = DAY_START + 24 * 60
     @closed = true
   end
   def each(&block)
@@ -349,6 +326,7 @@ def readData(rules, year)
       end
 
       # Categories
+      seenCategories = {}
       rule = rules.categorize(activity)
       categories = nil
       if rule.nil?
@@ -356,6 +334,12 @@ def readData(rules, year)
         categories = [WeightedObj.new(ERRORCAT, 1.0)]
       else
         categories = rule.categories
+        if categories.size == 1 && !seenCategories.has_key?(activity) && activity != categories[0].obj.name
+          seenCategories[activity] = Category.new(activity, categories[0].obj)
+          categories = [WeightedObj.new(seenCategories[activity], 1.0)]
+        else
+          categories.each do |c| seenCategories[c.obj.name] = 1 end
+        end
         if DIAG
           if seenActivities.has_key?(activity)
             seenActivities[activity] << file.lineno
@@ -741,7 +725,7 @@ if !ERRORS.empty?
   raise "Fix the above errors"
 end
 
-categories = data.days.flat_map do |day| day.flat_map do |a| a.categories.hierarchy end end.uniq.sort
+categories = data.days.flat_map do |day| day.flat_map do |a| a.categories.flat_map do |c| c.obj.hierarchy end end end.uniq.sort
 rules.generateColors(categories)
 
 if (Rules.isImageMode(rules.spec.mode))

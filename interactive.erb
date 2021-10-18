@@ -31,7 +31,7 @@ function hover(event, element) {
   if (null == pinnedElement) infoBox(element);
 }
 
-function bigre(event, element) {
+function doclick(event, element) {
   pinnedElement = element;
   infoBox(element);
 }
@@ -108,7 +108,7 @@ body {
 
 /* Details header */
 #details {
-  min-height : 100px;
+  height : 100px;
   width : 100%;
   display : flex;
   margin : 8px;
@@ -168,6 +168,7 @@ body {
   margin : 5px;
   flex : 0 0 auto;
   width : 200px;
+  overflow : hidden;
 }
 
 /* Day data */
@@ -182,6 +183,7 @@ body {
 /* Activity colors */
 .activity {
   opacity : <%= Math.sqrt(kACTIVITY_OPACITY) %>;
+  outline-offset : -1px;
 }
 
 <% categories.each do |category| %>
@@ -238,23 +240,27 @@ body {
         <% data.days.each_with_index do |day, index| %>
         <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
           <% day.each do |activity| %>
-          <div class="activity color_<%= activity.categories.htmlize() %> activity_<%= activity.categories.htmlize() %>"
-               style="flex : <%= activity.endTime - activity.startTime %> 1 auto;"
-               onmousemove="hover(event, this)" onmouseout="hover(event, null)" onclick="bigre(this, this)">
-            <div class="activityInfo">
-              <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %> [<%= activity.categories %>]<br/>
-              <%= activity.activity %>
-            </div>
-            <div class="categoryInfo">
-              <div class="infoBox">
-               <p><%= activity.activity %></p>
+          <div class="columns" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;">
+            <% activity.categories.each_with_index do |category, index| %>
+            <% if index != 0 %>
+            <div style="width : 1px; background-color : #7F7F7F;"></div>
+            <% end %>
+            <div class="activity color_<%= category.obj.htmlize() %> activity_<%= category.obj.htmlize() %>"
+                 style="flex : <%= category.weight %> 1 auto;"
+                 onmousemove="hover(event, this)" onmouseout="hover(event, null)" onclick="doclick(this, this)">
+              <div class="activityInfo">
+                <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %><br/>
+                <%= activity.activity %>
               </div>
-              <% activity.categories.each_parent do |c| %>
+              <div class="categoryInfo">
+                <% category.obj.each_parent do |c| %>
                 <div class="color_<%= c.htmlize() %> infoBox">
                   <p><%= c %></p>
                 </div>
-              <% end %>
+                <% end %>
+              </div>
             </div>
+            <% end %>
           </div>
           <% end %>
         </div>
