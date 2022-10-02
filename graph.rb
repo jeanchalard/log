@@ -34,20 +34,19 @@
 #                      Format is "Category = Category = ... = Target". This is equivalent to adding
 #                      the relevant rules under a [collapse] section in the rules file.
 
+require_relative 'util'
 require_relative 'rules'
 require_relative 'holidays'
 require 'fileutils'
 require 'rvg/rvg'
 require 'erb'
 
-DEFAULT_YEAR = 2021
-
 DIAG = ARGV.include?("-d")
 ARGV.delete("-d") if DIAG
 
 ERRORS = []
 
-ZZZ = 'Zzz'
+EVERYTHING = 'Everything'
 ZZZCAT = Category.new(ZZZ, nil)
 ERRORCAT = Category.new("Error", nil)
 
@@ -62,7 +61,7 @@ MINUTE_HEIGHT = HOURHEIGHT.to_f / 60
 FONT_SIZE = 18
 ACTIVITY_OPACITY = 0.6
 
-DAY_START = 5 * 60
+DAY_START_MINUTES = 5 * 60
 
 DOW = ['日', '月', '火', '水', '木', '金', '土', '日']
 
@@ -86,13 +85,9 @@ class Category
   def htmlize
     self.name.htmlize
   end
-  def to_s
-    if self.parent.nil?
-      name
-    else
-      "#{name}, #{self.parent.to_s}"
-    end
-  end
+end
+
+class RulesException < Exception
 end
 
 def parseTime(time)
@@ -103,11 +98,21 @@ end
 
 class Activity
   attr_reader :startTime, :endTime, :categories, :activity
+  # startTime is what's really in the file and should be used for computation.
+  # displayStartTime is what should be shown to the user.
+  # They only differ on the first and last activity on the day. For those, start/endTime are what is
+  # really in the file so they will be DAY_START_MINUTES and DAY_START_MINUTES + 24h, but displayStart/EndTime will
+  # be adjusted to be the start/end time of the previous/next day last/first activity if it's identical.
+  # Thus, considering day 1 and 2, last Zzz on day 1 may have startTime = 23:00/endTime = 29:00
+  # and first Zzz of day 2 may have startTime = 05:00/endTime = 08:00, then both will have
+  # displayStartTime = 23:00/displayEndTime = 08:00. Computing time from these is a little bit
+  # annoying, so use displayDuration for that
+  attr_accessor :displayStartTime, :displayEndTime
 
   def initialize(activity, startTime, categories)
     raise "|categories| must be an array" unless categories.is_a? Array
     categories.each do |c|
-      raise "Each category must be a WeightedObj(Category, Float) (is #{c.inspect})" unless (c.is_a?(WeightedObj) && c.obj.is_a?(Category))
+      raise RulesException.new("Each category must be a WeightedObj(Category, Float) (is #{c.inspect})") unless (c.is_a?(WeightedObj) && c.obj.is_a?(Category))
     end
     @activity = activity
     @startTime = startTime
@@ -117,9 +122,21 @@ class Activity
   def endTime=(endTime)
     raise "Endtime already set in #{self} : #{@endTime}" if !@endTime.nil?
     @endTime = endTime
+    @displayEndTime = endTime if @displayEndTime.nil?
   end
   def endTime
-    if @endTime.nil? then DAY_START + 24 * 60 else @endTime end
+    if @endTime.nil? then DAY_START_MINUTES + 24 * 60 else @endTime end
+  end
+  def displayStartTime
+    if @displayStartTime.nil? then @startTime else @displayStartTime end
+  end
+  def displayEndTime
+    if @displayEndTime.nil? then @endTime else @displayEndTime end
+  end
+  def displayDuration
+    endTime = self.displayEndTime
+    endTime += 24 * 60 if endTime < self.displayStartTime
+    endTime - self.displayStartTime
   end
   def to_s
     "Activity{#{@activity}[#{@categories}]}#{@startTime.to_hours_text}~#{self.endTime.to_hours_text}}"
@@ -155,9 +172,9 @@ class Day
   end
   def addActivity(time, categories, activity)
     time = parseTime(time)
-    time = DAY_START if time < DAY_START
-    if (@activities.empty? && time > DAY_START)
-      @activities << Activity.new(ZZZ, DAY_START, [WeightedObj.new(ZZZCAT, 1.0)])
+    time = DAY_START_MINUTES if time < DAY_START_MINUTES
+    if (@activities.empty? && time > DAY_START_MINUTES)
+      @activities << Activity.new(ZZZ, DAY_START_MINUTES, [WeightedObj.new(ZZZCAT, 1.0)])
     elsif (!@activities.empty? && time < @activities[-1].startTime)
       ERRORS << "Not ordered #{@date.strftime("%Y-%m-%d")} #{time.to_hours_text}"
       time = @activities[-1].startTime
@@ -170,7 +187,7 @@ class Day
   def computeSleepBeforeGetup
     getup = self.getup
     return 0 if getup.nil?
-    getup - DAY_START
+    getup - DAY_START_MINUTES
   end
   def computeSleepAfterGetup
     getup = self.getup || 0
@@ -196,12 +213,31 @@ class Day
     end
     t
   end
+  def endTime
+    @activities[-1].startTime
+  end
   def markers
     @markers
   end
   def close
-    @activities[-1].endTime = DAY_START + 24 * 60
+    @activities[-1].endTime = DAY_START_MINUTES + 24 * 60
+    @activities.each do |act|
+      time = act.endTime - act.startTime
+      act.categories.each do |c|
+        if holiday?
+          c.obj.addHolidayTime(c.weight * time)
+        else
+          c.obj.addWeekdayTime(c.weight * time)
+        end
+      end
+    end
     @closed = true
+  end
+  def firstActivity
+    @activities.first
+  end
+  def lastActivity
+    @activities.last
   end
   def each(&block)
     raise "Day not closed" unless @closed
@@ -262,6 +298,7 @@ def readData(rules, year)
   sleepTimes = []
   data = []
   seenActivities = {}
+  seenCategories = {}
   ARGV.each do |file|
     m = file.match(/(\D|\A)(\d\d\d\d)\D/)
     year = m[2].to_i unless m[2].nil?
@@ -269,8 +306,9 @@ def readData(rules, year)
     file = File.new(file)
     while l = file.gets
       l.chomp!
+      l.tr!(' ', ' ') # Avoid considering ' ' and ' ' differently
       if l.match(/\d\d-\d\d([  ]:.*)?/)
-        raise "Remaining currentCounter in line #{ARGF.file.lineno} : #{l}" unless currentCounters.empty?
+        raise "Remaining currentCounter in line #{file.lineno} : #{l}" unless currentCounters.empty?
         day = Day.new(year, l)
         if (day.date < PERIOD[0] || day.date > PERIOD[1])
           day = 'ignored'
@@ -281,7 +319,7 @@ def readData(rules, year)
       elsif day == 'ignored'
         next
       elsif day.nil?
-        raise "Day unknown in #{ARGF.file.lineno} : #{l}"
+        raise "Day unknown in #{file.lineno} : #{l}"
       end
       if !l.match(/\d{4} .*/)
         rules.matchCounter(l).each do |c|
@@ -326,7 +364,6 @@ def readData(rules, year)
       end
 
       # Categories
-      seenCategories = {}
       rule = rules.categorize(activity)
       categories = nil
       if rule.nil?
@@ -334,11 +371,13 @@ def readData(rules, year)
         categories = [WeightedObj.new(ERRORCAT, 1.0)]
       else
         categories = rule.categories
-        if categories.size == 1 && !seenCategories.has_key?(activity) && activity != categories[0].obj.name
-          seenCategories[activity] = Category.new(activity, categories[0].obj)
+        if categories.size == 1 && activity != categories[0].obj.name
+          if !seenCategories.has_key?(activity)
+            seenCategories[activity] = Category.new(activity, categories[0].obj)
+          end
           categories = [WeightedObj.new(seenCategories[activity], 1.0)]
         else
-          categories.each do |c| seenCategories[c.obj.name] = 1 end
+          categories.each do |c| seenCategories[c.obj.name] = c.obj end
         end
         if DIAG
           if seenActivities.has_key?(activity)
@@ -348,13 +387,23 @@ def readData(rules, year)
           end
         end
       end
-      day.addActivity(time, categories, activity)
+      begin
+        day.addActivity(time, categories, activity)
+      rescue RulesException => e
+        raise RulesException.new("Input line #{file.lineno} : \"#{l}\" => #{rules.categorize(activity)}")
+      end
     end
   end
   prev = nil
   data.reverse_each do |d|
     d.close
     d.sleepTime = if prev.nil? then nil else d.computeSleepAfterGetup + prev.computeSleepBeforeGetup end
+    unless prev.nil?
+      if d.lastActivity.activity == prev.firstActivity.activity
+        d.lastActivity.displayEndTime = prev.firstActivity.endTime
+        prev.firstActivity.displayStartTime = d.lastActivity.startTime
+      end
+    end
     prev = d
   end
   if DIAG
@@ -396,7 +445,7 @@ def generateRuledBackground(width, height, data, mode)
   # Legend
   (0..24).each do |hour|
     y = height - hour * MINUTE_HEIGHT * 60
-    timeLegend = if Rules::Spec::MODE_CALENDAR == mode then (24 + DAY_START / 60) - hour else hour end
+    timeLegend = if Rules::Spec::MODE_CALENDAR == mode then (24 + DAY_START_MINUTES / 60) - hour else hour end
     if timeLegend % 2 == 0
       scale.line(LEGEND_WIDTH, y, width, y).styles(:stroke => 'white', :stroke_opacity => if timeLegend == 24 then 0.8 else 0.3 end)
       text = Magick::RVG::Text.new.tspan("%02i" % timeLegend)
@@ -481,7 +530,7 @@ end
 
 def generateDay(rules, day, width, height)
   def toY(minute, height)
-    (minute - DAY_START) * MINUTE_HEIGHT
+    (minute - DAY_START_MINUTES) * MINUTE_HEIGHT
   end
 
   image = Magick::RVG.new(width, height)
@@ -617,18 +666,6 @@ def getTotals(categories, data)
   totals
 end
 
-# Returns the argument of the passed switch, or null if the switch is not present
-def arg(arg, takesArg)
-  if ARGV.include?(arg)
-    i = ARGV.index(arg)
-    ARGV.delete_at(i)
-    return true if !takesArg
-    ARGV.delete_at(i)
-  else
-    nil
-  end
-end
-
 def filename(basename, specname, extension)
   FileUtils.mkdir_p('out')
   FileUtils.mkdir_p("out/#{specname}")
@@ -678,6 +715,50 @@ def printCountOutputs(outputs)
   end
 end
 
+class DumpedCategory
+  attr_reader :duration
+  def initialize(name, duration, color)
+    @name = name
+    @duration = duration
+    @color = color
+    @children = []
+  end
+  def <<(cat)
+    @children << cat
+  end
+  def to_json(indent)
+    is = " " * (2 * indent)
+    s  = "#{is}{\n"
+    s += "#{is}  \"name\" : \"#{@name.gsub(',', '\,').gsub('"', '\"')}\",\n"
+    s += "#{is}  \"duration\" : #{@duration},\n"
+    s += "#{is}  \"color\" : \"#{@color}\",\n"
+    unless @children.empty?
+      s += "#{is}  \"children\" : [\n"
+      s += @children.map{|c|c.to_json(indent + 1)}.join(",\n")
+      s += "\n#{is}  ]\n"
+    end
+    s += "#{is}}"
+  end
+  def dump(indent)
+    (" " * (2 * indent)) + "#{@name} #{@duration.to_hours_text}" + @children.map{|c|"\n" + c.dump(indent + 1)}.join
+  end
+end
+
+def dumpCategory(c, rules)
+  d = DumpedCategory.new(c.name, c.time, rules.categoryColor(c))
+  children = c.children
+  remainingTime = c.time - children.sum {|x| x.time}
+  if remainingTime > 0 && !children.empty?
+    remainingCategory = Category.new(c.name, nil)
+    remainingCategory.addWeekdayTime(remainingTime)
+    children << remainingCategory
+  end
+  children.sort{|a,b|b.time <=> a.time}.each do |child|
+    d << dumpCategory(child, rules) unless child.time <= 0
+  end
+  d
+end
+
 period = arg("-p", true) || '2000-01-01~2200-12-31'
 CHECKS = []
 while (check = arg("-c", true)) do
@@ -698,11 +779,7 @@ if outArg.nil? && ARGV.length > 1 && rules.spec.mode != Rules::Spec::MODE_COUNT
   raise "Multiple files but no output name given"
 end
 BASENAME = outArg || File.basename(ARGV[0]).gsub(/.log$/, '')
-basenameMatch = BASENAME.match(/(\D|\A)(20\d\d)\D/)
-basenameMatch = ARGV[0].match(/(\D|\A)(20\d\d)\D/) if basenameMatch.nil?
-raise "Unable to deduce year" if (basenameMatch.nil?)
-year = basenameMatch[2]
-YEAR = if year.nil? then DEFAULT_YEAR else year end
+YEAR = deduceYear(BASENAME)
 PERIOD = parsePeriod(period, YEAR)
 
 searchInputFilePath(ARGV)
@@ -717,7 +794,7 @@ if !ERRORS.empty?
   unless unknowns.empty?
     puts
     unknowns.map {|e| e.sub(/[^:]+: (.*)/, "\\1") }.uniq.each do |task|
-      puts "#{task.gsub('+', '\\\+').gsub('?', '\\\?').gsub('(', '\\\(').gsub(')', '\\\)')} = Repos"
+      puts "#{task.gsub('+', '\\\+').gsub('?', '\\\?').gsub('(', '\\\(').gsub(')', '\\\)').gsub('$', '\\$')} = Repos"
     end
     puts
   end
@@ -789,14 +866,54 @@ when Rules::Spec::MODE_COUNT
   printCountOutputs(outputs)
 
 when Rules::Spec::MODE_INTERACTIVE
+  rootCategories = []
+  categories.each do |c|
+    c = c.parent until c.parent.nil?
+    rootCategories << c unless rootCategories.include?(c)
+  end
+  dumpedCategories = rootCategories.sort{|a,b|b.time <=> a.time}.map do |c| dumpCategory(c, rules) end
+  allCategories = DumpedCategory.new(EVERYTHING, dumpedCategories.sum{|c|c.duration}, "#000000")
+  dumpedCategories.each do |c| allCategories << c end
   output = File.write(htmlFilename(BASENAME, rules.spec.name),
                       ERB.new(File.read('interactive.erb')).result_with_hash(
                         :data => data,
                         :rules => rules,
                         :categories => categories,
+                        :dumpedCategories => allCategories,
                         :kDOW => DOW,
                         :kACTIVITY_OPACITY => ACTIVITY_OPACITY
                       ))
+  puts dumpedCategories.map{|c|c.dump(0)}.join("\n")
+
+  avgSleepTime = 0
+  avgEndTime = 0
+  sleepDays = if data.days.length == 1 then 1 else data.days.length - 1 end
+  data.days.each do |day|
+    avgSleepTime += day.sleepTime unless day.sleepTime.nil?
+    avgEndTime += day.endTime
+  end
+  avgSleepTime /= sleepDays
+  avgEndTime /= data.days.length
+
+  semiDeviationEndTime = 0
+  semiDeviationCount = 0
+  deviationSleepTime = 0
+  deviationEndTime = 0
+  data.days.each do |day|
+    deviationSleepTime += (day.sleepTime - avgSleepTime) ** 2 unless day.sleepTime.nil?
+    deviationEndTime += (day.endTime - avgEndTime) ** 2
+    if (day.endTime > avgEndTime)
+      semiDeviationEndTime += (day.endTime - avgEndTime) ** 2
+      semiDeviationCount += 1
+    end
+  end
+  deviationSleepTime = Math.sqrt(deviationSleepTime / sleepDays)
+  deviationEndTime = Math.sqrt(deviationEndTime / data.days.length)
+  semiDeviationEndTime = Math.sqrt(semiDeviationEndTime / semiDeviationCount)
+  puts "Average sleep length : #{avgSleepTime.to_hours_text} (deviation #{deviationSleepTime.to_hours_text})"
+  puts "Average sleep hour : #{avgEndTime.to_hours_text} (deviation #{deviationEndTime.to_hours_text}, if counting only late #{semiDeviationEndTime.to_hours_text})"
+
+
 end
 
 unless data.counters.empty?

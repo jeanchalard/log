@@ -4,6 +4,15 @@ Rule = Struct.new(:pattern, :categories)
 WeightedObj = Struct.new(:obj, :weight)
 LocalRandom = Random.new(1)
 class Category < Struct.new(:name, :parent)
+  attr_reader :time, :weekdayTime, :holidayTime, :children
+  def initialize(name, parent)
+    super(name, parent)
+    parent.children << self unless parent.nil?
+    @children = []
+    @time = 0
+    @weekdayTime = 0
+    @holidayTime = 0
+  end
   def <=>(other)
     name <=> other.name
   end
@@ -15,8 +24,18 @@ class Category < Struct.new(:name, :parent)
     end
   end
   def each_parent(&block)
-    block.call(name)
+    block.call(self)
     parent.each_parent(&block) unless parent.nil?
+  end
+  def addWeekdayTime(time)
+    @weekdayTime += time
+    @time += time
+    parent.addWeekdayTime(time) unless parent.nil?
+  end
+  def addHolidayTime(time)
+    @holidayTime += time
+    @time += time
+    parent.addHolidayTime(time) unless parent.nil?
   end
 end
 
@@ -65,7 +84,7 @@ class Rules
     @counters = counters
     @markers = markers
     categories = rules.flat_map {|r| r.categories.map {|c| c.obj } }.uniq
-    cache = { nil => nil }
+    cache = { nil => nil, ZZZ => ZZZCAT }
     categories = categories.map {|c| getCategory(c, collapse, cache) }
     rules.each do |r|
       r.categories.each do |c|
@@ -167,13 +186,6 @@ class String
   end
 end
 
-def findFile(filename)
-  [filename, "#{filename}.grc", "rules/#{filename}", "rules/#{filename}.grc"].each do |name|
-    return name if File.exists?(name)
-  end
-  raise "File not found #{filename}"
-end
-
 def readRulesInternal(filename)
   mode = nil
   spec = Rules::Spec.new("unnamed", Rules::Spec::MODE_CALENDAR)
@@ -183,7 +195,7 @@ def readRulesInternal(filename)
   rules = []
   collapse = {}
   caseInsensitive = true
-  f = File.new(findFile(filename))
+  f = File.new(findRuleFile(filename, '.grc'))
   while l = f.gets
     l = l.chomp
     case l

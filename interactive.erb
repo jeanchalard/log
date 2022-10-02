@@ -1,4 +1,33 @@
 <html><head><script>
+// Data
+categories = <%= dumpedCategories.to_json(0) %>
+
+function addParentLink(category) {
+  if (undefined == category.children) return;
+  for (c of category.children) {
+    c.parent = category;
+    addParentLink(c);
+  }
+}
+addParentLink(categories);
+
+// Tab switching
+function showTab(event, tab) {
+  for (let t of document.getElementsByClassName("tab"))
+    t.className = t.className.replace(" activeTab", "");
+  event.currentTarget.className += " activeTab";
+
+  let calendar = document.getElementById("calendar");
+  let timeuse = document.getElementById("timeuse");
+  for (let c of [calendar, timeuse]) {
+    c.style.display = c.id == tab ? "flex" : "none";
+  }
+
+  if (tab == "timeuse") drawCamembert();
+}
+
+
+// Calendar : tooltip
 let pinnedElement = null;
 let lastHoverElement = null;
 function hover(event, element) {
@@ -41,6 +70,144 @@ function infoBox(element) {
   let source = element.querySelector(".categoryInfo");
   infoBox.innerHTML = source.innerHTML;
 }
+
+
+// Time use
+let TAU = 2 * Math.PI;
+
+var hitRegions = undefined;
+var currentCategory = categories;
+
+function drawCamembert() {
+  // HTML doesn't like canvas with a CSS-style size, so set them explicitly
+  let canvas = document.getElementById("camembert");
+  let camembertLegend = document.getElementById("camembertLegend");
+  canvas.removeAttribute("width"); canvas.removeAttribute("height");
+  let canvasStyle = getComputedStyle(document.getElementById("timeuse"));
+  // Style properties are strings with "px" appended, but that doesn't work
+  // when setting on the .width and .height (as opposed to .style.width and
+  // .style.height, but those don't work for the canvas size) as stated above
+  let size = { width : parseInt(canvasStyle.width, 10) * 3 / 4, height : parseInt(canvasStyle.height, 10)};
+  canvas.width = size.width; canvas.height = size.height;
+  camembertLegend.style.width = parseInt(canvasStyle.width) * 1 / 4;
+
+  let centerx = size.width / 2;
+  let centery = size.height / 2;
+
+  var legend = "";
+  let camembert = canvas.getContext("2d");
+  camembert.strokeStyle = "#FFFFFF";
+  camembert.textAlign = "center";
+  camembert.font = "22px Noto Sans";
+
+  let radius = Math.min(size.width, size.height) * 0.45;
+  let hR = [];
+  if (undefined == currentCategory.children) {
+    camembert.fillStyle = currentCategory.color;
+    camembert.beginPath();
+    camembert.arc(centerx, centery, radius, 0, TAU);
+    camembert.fill();
+    camembert.stroke();
+
+    camembert.fillStyle = "#FFFFFF";
+    camembert.fillText(currentCategory.name, centerx, centery);
+
+    legend += "<center style=\"background-color : ";
+    legend += currentCategory.color;
+    legend += "; margin : 15px;\" weight1 legendItem\">";
+    legend += currentCategory.name;
+    legend += "</center>";
+  } else {
+    var angle = TAU;
+    var minutes = 0;
+    for (c of currentCategory.children) minutes += c.duration;
+    for (c of currentCategory.children) {
+      camembert.fillStyle = c.color;
+      camembert.beginPath();
+      let path = new Path2D();
+      path.moveTo(size.width / 2, size.height / 2);
+      let dAngle = TAU * c.duration / minutes;
+      path.arc(centerx, centery, radius, angle - dAngle, angle);
+      camembert.fill(path);
+      camembert.stroke(path);
+      angle -= dAngle;
+      hR.push({category : c, path : path});
+
+      if (dAngle > TAU / 16) {
+        camembert.fillStyle = "#FFFFFF";
+        let a = angle + dAngle / 2;
+        camembert.fillText(c.name, centerx + radius * Math.cos(a) / 2, centery + radius * Math.sin(a) / 2);
+      }
+
+      legend += "<center style=\"background-color : ";
+      legend += c.color;
+      legend += "; margin-left : 15px; margin-right : 15px; margin-bottom : 3px\" weight1 legendItem\">";
+      legend += c.name;
+      legend += "</center>";
+    }
+  }
+  camembert.fillStyle = "#FFFFFF";
+  camembert.font = "bold 26px Noto Sans";
+  camembert.fillText(currentCategory.name + " (" + renderTime(currentCategory.duration) + ")", centerx, size.height - 12);
+
+  hitRegions = hR;
+  camembertLegend.innerHTML = legend;
+}
+
+function renderTime(duration) {
+  let hours = Math.trunc(duration / 60);
+  let h = hours >= 10 ? hours : "0" + hours;
+  let minutes = Math.trunc(duration % 60);
+  let m = minutes >= 10 ? minutes : "0" + minutes;
+  return "" + h + ":" + m;
+}
+
+function onMouseMoveOnCamembert(event) {
+  let category = findCategoryOnCamembert(event);
+  const tooltip = document.getElementById("tooltip");
+  if (undefined == category) {
+    tooltip.style.display = "none";
+    return;
+  }
+
+  let proportion = Math.trunc(10000 * category.duration / category.parent.duration) / 100.0;
+  tooltip.innerHTML = category.name + "<br/>" + renderTime(category.duration) + " (" + proportion + "%)";
+  tooltip.style.display = "block";
+
+  // Center the tooltip
+  const tooltipSize = tooltip.getBoundingClientRect();
+  const tooltipWidth = tooltipSize.right - tooltipSize.left;
+  let x = event.clientX;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = (event.clientY + 20) + "px";
+}
+
+function onClickOnCamembert(event) {
+  if (0 == event.button) {
+    let category = findCategoryOnCamembert(event);
+    if (undefined == category) return;
+    currentCategory = category;
+  } else if (2 == event.button) {
+    if (undefined != currentCategory.parent)
+      currentCategory = currentCategory.parent;
+  }
+  drawCamembert();
+}
+
+function findCategoryOnCamembert(event) {
+  let camembert = document.getElementById("camembert").getContext("2d");
+  for (region of hitRegions) {
+    if (camembert.isPointInPath(region.path, event.offsetX, event.offsetY))
+      return region.category;
+  }
+  return undefined;
+}
+
+function resize() {
+  drawCamembert();
+}
+window.onresize = resize;
+
 </script><style>
 
 /* Constants */
@@ -79,15 +246,42 @@ html {
 }
 body {
   height : 100%;
+  overflow : hidden;
   padding : var(--general-margin);
   display : flex; flex-direction : column;
+}
+div {
+  overflow : hidden;
+}
+
+/* Tabs */
+#calendar { display : flex; flex-direction : column; flex : 1 1 auto; }
+#timeuse { display : flex; flex-direction : column; flex : 1 1 auto; overflow :  hidden; }
+#tabs {
+  display : flex;
+  flex-direction : row;
+  background-color : #202020;
+}
+.tab {
+  font-size : 21;
+  background-color : #303030;
+  border : none;
+  outline : none;
+  margin-top : 3px; margin-bottom : 3px;
+  margin-left : 10px; margin-right : 10px;
+  transition : 0.3s;
+}
+#tabs button:hover {
+  background-color : #404040;
+}
+#tabs button.activeTab {
+  background-color : #606060;
 }
 
 /* Tools */
 .rows { display : flex; flex-direction : column; }
 .columns { display : flex; flex-direction : row; }
 .weight1 { flex : 1 1 auto; }
-.marginLR { margin-left : var(--general-margin); margin-right : var(--general-margin); }
 
 /* Day legend */
 .holiday { color : #FFAFAF; }
@@ -101,9 +295,16 @@ body {
 /* Footer */
 .footer {
   width : 100%;
-  margin-top : calc(var(--general-margin) / 2);
   flex : 0 1 auto;
   display : flex;
+  flex-wrap : wrap;
+}
+
+.legendItem {
+  margin-left : var(--general-margin);
+  margin-right : var(--general-margin);
+  margin-top : calc(var(--general-margin) / 2);
+  margin-bottom : calc(var(--general-margin) / 2);
 }
 
 /* Details header */
@@ -167,8 +368,12 @@ body {
   padding : 5px;
   margin : 5px;
   flex : 0 0 auto;
-  width : 200px;
+  width : 300px;
   overflow : hidden;
+  font-size : 12px;
+}
+.infoBoxTitle {
+  font-size : 14px;
 }
 
 /* Day data */
@@ -211,76 +416,110 @@ body {
   display : none;
 }
 
-</style></head><body>
+/* Time use */
+/* Camembert canvas */
+#camembert {
+  background-color : #303030;
+  display : flex;
+  flex : 1 1 auto;
+}
+#camembertLegend {
+  display : flex;
+  flex : 0 0 auto;
+  overflow-y : scroll;
+}
+
+</style>
+</head><body>
 <div id="tooltip"></div>
-<div id="details" class="columns">
-</div>
-<div class="contents columns">
-  <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
-    <div class="hourLegends rows" style="position : relative;">
-      <% 12.times do |i| %>
-      <div class="hourLegend"><p class="verticalCenter"><%= "%02i" % (i * 2 + 6) %></p></div>
-      <% end %>
-    </div>
-    <div class="dayLegend" style="overflow-x : scroll; visibility : hidden;"> <!-- take the same space as the real dayLegend -->
-      <center class="day">00<br/>月</center>
-    </div>
+<div id="calendar">
+  <div id="details" class="columns">
   </div>
-  <div class="gridData rows">
-    <div style="position : relative; flex : 1 1 auto; width : 100%;">
-      <div class="grid rows" style="position : absolute; top : 0px; left : 0px;">
-        <% 11.times do |i| %>
-        <div class="gridHourSolid"></div>
-        <div class="gridHourDashed"></div>
+  <div class="contents columns">
+    <div class="rows" style="flex : 0 0 auto;"> <!-- have the same layout as the box on the right, avoid the day legend space -->
+      <div class="hourLegends rows" style="position : relative;">
+        <% 12.times do |i| %>
+        <div class="hourLegend"><p class="verticalCenter"><%= "%02i" % (i * 2 + 6) %></p></div>
         <% end %>
-        <div class="gridHourSolid"></div>
-        <div class="gridHourDashed" style="border-bottom : 0px;"></div>
       </div>
-      <div class="data columns" style="position : absolute; top : 0px; left : 0px;">
-        <% data.days.each_with_index do |day, index| %>
-        <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
-          <% day.each do |activity| %>
-          <div class="columns" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;">
-            <% activity.categories.each_with_index do |category, index| %>
-            <% if index != 0 %>
-            <div style="width : 1px; background-color : #7F7F7F;"></div>
-            <% end %>
-            <div class="activity color_<%= category.obj.htmlize() %> activity_<%= category.obj.htmlize() %>"
-                 style="flex : <%= category.weight %> 1 auto;"
-                 onmousemove="hover(event, this)" onmouseout="hover(event, null)" onclick="doclick(this, this)">
-              <div class="activityInfo">
-                <%= activity.startTime.to_hours_text %> ~ <%= activity.endTime.to_hours_text %><br/>
-                <%= activity.activity %>
-              </div>
-              <div class="categoryInfo">
-                <% category.obj.each_parent do |c| %>
-                <div class="color_<%= c.htmlize() %> infoBox">
-                  <p><%= c %></p>
+      <div class="dayLegend" style="overflow-x : scroll; visibility : hidden;"> <!-- take the same space as the real dayLegend -->
+        <center class="day">00<br/>月</center>
+      </div>
+    </div>
+    <div class="gridData rows">
+      <div style="position : relative; flex : 1 1 auto; width : 100%;">
+        <div class="grid rows" style="position : absolute; top : 0px; left : 0px;">
+          <% 11.times do |i| %>
+          <div class="gridHourSolid"></div>
+          <div class="gridHourDashed"></div>
+          <% end %>
+          <div class="gridHourSolid"></div>
+          <div class="gridHourDashed" style="border-bottom : 0px;"></div>
+        </div>
+        <% weekdays = data.days.count {|d| !d.holiday? } %>
+        <% holidays = data.days.count {|d| d.holiday? } %>
+        <% weekdays = 1 if weekdays == 0 %>
+        <% holidays = 1 if holidays == 0 %>
+        <div class="data columns" style="position : absolute; top : 0px; left : 0px;">
+          <% data.days.each_with_index do |day, index| %>
+          <div class="day <%= if index != 0 then 'separatorLeft' else '' end %> rows">
+            <% day.each do |activity| %>
+            <div class="columns" style="flex : <%= activity.endTime - activity.startTime %> 1 auto;">
+              <% activity.categories.each_with_index do |category, index| %>
+              <% if index != 0 %>
+              <div style="width : 1px; background-color : #7F7F7F;"></div>
+              <% end %>
+              <div class="activity color_<%= category.obj.htmlize() %> activity_<%= category.obj.htmlize() %>"
+                   style="flex : <%= category.weight %> 1 auto;"
+                   onmousemove="hover(event, this)" onmouseout="hover(event, null)" onclick="doclick(this, this)">
+                <div class="activityInfo">
+                  <%= activity.displayStartTime.to_hours_text %> ~ <%= activity.displayEndTime.to_hours_text %> (<%= activity.displayDuration.to_hours_text %>)<br/>
+                  <%= activity.activity %>
                 </div>
-                <% end %>
+                <div class="categoryInfo">
+                  <% category.obj.each_parent do |c| %>
+                  <div class="color_<%= c.htmlize() %> infoBox">
+                    <p class="infoBoxTitle"><%= c.name %></p>
+                    <p>Total time : <%= c.time.to_hours_text %> (<%= (c.time / (weekdays + holidays)).to_hours_text %>/d)</p>
+                    <p>Weekday time : <%= c.weekdayTime.to_hours_text %> (<%= (c.weekdayTime / weekdays).to_hours_text %>/d)</p>
+                    <p>Holiday time : <%= c.holidayTime.to_hours_text %> (<%= (c.holidayTime / holidays).to_hours_text %>/d)</p>
+                  </div>
+                  <% end %>
+                </div>
               </div>
+              <% end %>
             </div>
             <% end %>
           </div>
           <% end %>
         </div>
+      </div>
+      <div class="dayLegend columns">
+        <% data.days.each do |day| %>
+        <center class="day <%= if day.holiday? then 'holiday' else 'weekday' end %>">
+          <%= "%02i<br/>%s" % [day.date.day, kDOW[day.date.wday]] %>
+        </center>
         <% end %>
       </div>
     </div>
-    <div class="dayLegend columns">
-      <% data.days.each do |day| %>
-      <center class="day <%= if day.holiday? then 'holiday' else 'weekday' end %>">
-        <%= "%02i<br/>%s" % [day.date.day, kDOW[day.date.wday]] %>
-      </center>
-      <% end %>
-    </div>
+  </div>
+  <div class="footer columns">
+  <% c = categories.map {|x| x.name } %>
+  <% rules.colors.map do |activity, color| %>
+    <% next unless c.include?(activity) %>
+    <center class="color_<%= activity.htmlize() %> weight1 legendItem"><%= activity %></center>
+  <% end %>
   </div>
 </div>
-<div class="footer columns">
-<% c = categories.map {|x| x.name } %>
-<% rules.colors.map do |activity, color| %>
-  <% next unless c.include?(activity) %>
-  <center class="color_<%= activity.htmlize() %> weight1 marginLR"><%= activity %></center>
-<% end %>
+<div id="timeuse" style="display:none;">
+  <div class="columns">
+    <canvas id="camembert" oncontextmenu="event.preventDefault()" onMouseMove="onMouseMoveOnCamembert(event)" onmouseup="onClickOnCamembert(event)"></canvas>
+    <div id="camembertLegend" class="rows"></div>
+  </div>
+</div>
+<hr/>
+<div id="tabs">
+  <button class="tab activeTab" onClick="showTab(event, 'calendar')">Calendar</button>
+  <button class="tab" onClick="showTab(event, 'timeuse')">Time use</button>
 </div>
 </body></html>
