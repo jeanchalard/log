@@ -1,5 +1,7 @@
 <html><head><script>
 // Data
+globals = { "weekdays" : <%= data.days.count {|d| !d.holiday? } %>,
+    "holidays" : <%= data.days.count {|d| d.holiday? } %> };
 categories = <%= dumpedCategories.to_json(0) %>
 
 function addParentLink(category) {
@@ -66,9 +68,28 @@ function doclick(event, element) {
 }
 
 function infoBox(element) {
+  let model = document.getElementById("infoBox").innerHTML;
   let infoBox = document.getElementById("details");
   let source = element.querySelector(".categoryInfo");
-  infoBox.innerHTML = source.innerHTML;
+  infoBox.innerHTML = "";
+
+  let cat = source.childNodes[0].data.split("__");
+  let currentCategory = categories;
+  for (c of cat) {
+      currentCategory = currentCategory.children.find(function(e) { return e["name"] == c; });
+      let elem = document.createElement("div");
+      elem.style.background = currentCategory.color;
+      elem.innerHTML = model
+          .replace('{total_time}', renderTime(currentCategory.duration))
+          .replace('{total_per_day_time}', renderTime(currentCategory.duration / (globals.weekdays + globals.holidays)))
+          .replace('{weekday_time}', renderTime(currentCategory.weekdayDuration))
+          .replace('{weekday_per_day_time}', renderTime(currentCategory.weekdayDuration / globals.weekdays))
+          .replace('{holiday_time}', renderTime(currentCategory.holidayDuration))
+          .replace('{holiday_per_day_time}', renderTime(currentCategory.holidayDuration / globals.holidays));
+      elem.classList.add("infoBox");
+      elem.querySelector(".infoBoxTitle").innerHTML = currentCategory.name;
+      infoBox.appendChild(elem);
+  }
 }
 
 
@@ -371,6 +392,7 @@ div {
   width : 300px;
   overflow : hidden;
   font-size : 12px;
+  text-shadow : #000000 1px 1px 2px;
 }
 .infoBoxTitle {
   font-size : 14px;
@@ -432,6 +454,12 @@ div {
 </style>
 </head><body>
 <div id="tooltip"></div>
+<div id="infoBox" style="display: none;">
+  <p class="infoBoxTitle">name</p>
+  <p>Total time : {total_time} ({total_per_day_time}/d)</p>
+  <p>Weekday time : {weekday_time} ({weekday_per_day_time}/d)</p>
+  <p>Holiday time : {holiday_time} ({holiday_per_day_time}/d)</p>
+</div>
 <div id="calendar">
   <div id="details" class="columns">
   </div>
@@ -476,16 +504,7 @@ div {
                   <%= activity.displayStartTime.to_hours_text %> ~ <%= activity.displayEndTime.to_hours_text %> (<%= activity.displayDuration.to_hours_text %>)<br/>
                   <%= activity.activity %>
                 </div>
-                <div class="categoryInfo">
-                  <% category.obj.each_parent do |c| %>
-                  <div class="color_<%= c.htmlize() %> infoBox">
-                    <p class="infoBoxTitle"><%= c.name %></p>
-                    <p>Total time : <%= c.time.to_hours_text %> (<%= (c.time / (weekdays + holidays)).to_hours_text %>/d)</p>
-                    <p>Weekday time : <%= c.weekdayTime.to_hours_text %> (<%= (c.weekdayTime / weekdays).to_hours_text %>/d)</p>
-                    <p>Holiday time : <%= c.holidayTime.to_hours_text %> (<%= (c.holidayTime / holidays).to_hours_text %>/d)</p>
-                  </div>
-                  <% end %>
-                </div>
+                <div class="categoryInfo"><%= category.obj.hierarchy.reverse.map{|x|x.name}.join("__") %></div>
               </div>
               <% end %>
             </div>

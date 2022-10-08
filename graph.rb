@@ -371,11 +371,11 @@ def readData(rules, year)
         categories = [WeightedObj.new(ERRORCAT, 1.0)]
       else
         categories = rule.categories
-        if categories.size == 1 && activity != categories[0].obj.name
-          if !seenCategories.has_key?(activity)
-            seenCategories[activity] = Category.new(activity, categories[0].obj)
+        if categories.size == 1 && activity.downcase != categories[0].obj.name.downcase
+          if !seenCategories.has_key?(activity.downcase)
+            seenCategories[activity.downcase] = Category.new(activity, categories[0].obj)
           end
-          categories = [WeightedObj.new(seenCategories[activity], 1.0)]
+          categories = [WeightedObj.new(seenCategories[activity.downcase], 1.0)]
         else
           categories.each do |c| seenCategories[c.obj.name] = c.obj end
         end
@@ -716,10 +716,12 @@ def printCountOutputs(outputs)
 end
 
 class DumpedCategory
-  attr_reader :duration
-  def initialize(name, duration, color)
+  attr_reader :duration, :weekdayDuration, :holidayDuration
+  def initialize(name, duration, weekdayDuration, holidayDuration, color)
     @name = name
     @duration = duration
+    @weekdayDuration = weekdayDuration
+    @holidayDuration = holidayDuration
     @color = color
     @children = []
   end
@@ -731,6 +733,8 @@ class DumpedCategory
     s  = "#{is}{\n"
     s += "#{is}  \"name\" : \"#{@name.gsub(',', '\,').gsub('"', '\"')}\",\n"
     s += "#{is}  \"duration\" : #{@duration},\n"
+    s += "#{is}  \"weekdayDuration\" : #{@weekdayDuration},\n"
+    s += "#{is}  \"holidayDuration\" : #{@holidayDuration},\n"
     s += "#{is}  \"color\" : \"#{@color}\",\n"
     unless @children.empty?
       s += "#{is}  \"children\" : [\n"
@@ -745,7 +749,7 @@ class DumpedCategory
 end
 
 def dumpCategory(c, rules)
-  d = DumpedCategory.new(c.name, c.time, rules.categoryColor(c))
+  d = DumpedCategory.new(c.name, c.time, c.weekdayTime, c.holidayTime, rules.categoryColor(c))
   children = c.children
   remainingTime = c.time - children.sum {|x| x.time}
   if remainingTime > 0 && !children.empty?
@@ -872,7 +876,7 @@ when Rules::Spec::MODE_INTERACTIVE
     rootCategories << c unless rootCategories.include?(c)
   end
   dumpedCategories = rootCategories.sort{|a,b|b.time <=> a.time}.map do |c| dumpCategory(c, rules) end
-  allCategories = DumpedCategory.new(EVERYTHING, dumpedCategories.sum{|c|c.duration}, "#000000")
+  allCategories = DumpedCategory.new(EVERYTHING, dumpedCategories.sum{|c|c.duration}, dumpedCategories.sum{|c|c.holidayDuration}, dumpedCategories.sum{|c|c.holidayDuration}, "#000000")
   dumpedCategories.each do |c| allCategories << c end
   output = File.write(htmlFilename(BASENAME, rules.spec.name),
                       ERB.new(File.read('interactive.erb')).result_with_hash(
