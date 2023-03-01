@@ -155,4 +155,23 @@ HOLIDAYS = [
   '2022-12-05', # Pris ma journée
   '2022-12-06', # Pris ma journée
   '2022-12-07', # Pris ma journée
+
+  '2022-01-02', # 元旦振替
+  '2022-01-04', # Mercredi
+  '2022-01-09', # 成人の日
+  '2022-01-11', # Mercredi
+  '2022-01-18', # Mercredi
+  '2022-01-25', # Mercredi
+
+  '2022-02-01', # Mercredi
+  '2022-02-08', # Mercredi
+  '2022-02-15', # Mercredi
+  '2022-02-22', # Mercredi
+  '2022-02-23', # 天皇誕生日
+  '2022-02-24', # Pris ma journée pour aller au ski
+
+  '2022-03-01', # Mercredi
+  '2022-03-08', # Mercredi
+  '2022-03-15', # Mercredi
+  '2022-03-22', # Mercredi
 ]
