@@ -798,7 +798,8 @@ if !ERRORS.empty?
   unless unknowns.empty?
     puts
     unknowns.map {|e| e.sub(/[^:]+: (.*)/, "\\1") }.uniq.each do |task|
-      puts "#{task.gsub('+', '\\\+').gsub('?', '\\\?').gsub('(', '\\\(').gsub(')', '\\\)').gsub('$', '\\$')} = Repos"
+      suggestion = if task.match(/Se battre.*/) then "Se battre" else "Repos" end
+      puts "#{task.gsub('+', '\\\+').gsub('?', '\\\?').gsub('(', '\\\(').gsub(')', '\\\)').gsub('$', '\\$')} = #{suggestion}"
     end
     puts
   end
@@ -913,7 +914,7 @@ when Rules::Spec::MODE_INTERACTIVE
   end
   deviationSleepTime = Math.sqrt(deviationSleepTime / sleepDays)
   deviationEndTime = Math.sqrt(deviationEndTime / data.days.length)
-  semiDeviationEndTime = Math.sqrt(semiDeviationEndTime / semiDeviationCount)
+  semiDeviationEndTime = if (0 == semiDeviationEndTime) then 0 else Math.sqrt(semiDeviationEndTime / semiDeviationCount) end
   puts "Average sleep length : #{avgSleepTime.to_hours_text} (deviation #{deviationSleepTime.to_hours_text})"
   puts "Average sleep hour : #{avgEndTime.to_hours_text} (deviation #{deviationEndTime.to_hours_text}, if counting only late #{semiDeviationEndTime.to_hours_text})"
 

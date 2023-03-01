@@ -78,16 +78,16 @@ function infoBox(element) {
   for (c of cat) {
       currentCategory = currentCategory.children.find(function(e) { return e["name"] == c; });
       let elem = document.createElement("div");
+      elem.classList.add("infoBox");
       elem.style.background = currentCategory.color;
       elem.innerHTML = model
+          .replace('{name}', currentCategory.name)
           .replace('{total_time}', renderTime(currentCategory.duration))
           .replace('{total_per_day_time}', renderTime(currentCategory.duration / (globals.weekdays + globals.holidays)))
           .replace('{weekday_time}', renderTime(currentCategory.weekdayDuration))
           .replace('{weekday_per_day_time}', renderTime(currentCategory.weekdayDuration / globals.weekdays))
           .replace('{holiday_time}', renderTime(currentCategory.holidayDuration))
           .replace('{holiday_per_day_time}', renderTime(currentCategory.holidayDuration / globals.holidays));
-      elem.classList.add("infoBox");
-      elem.querySelector(".infoBoxTitle").innerHTML = currentCategory.name;
       infoBox.appendChild(elem);
   }
 }
@@ -248,9 +248,9 @@ window.onresize = resize;
 }
 
 /* Magic scrollbar incantations */
-*::-webkit-scrollbar { width : 12px; height : 12px; }
-::-webkit-scrollbar-track { background: #101010; border-radius: 12px; }
-::-webkit-scrollbar-thumb { border-radius: 12px; background: #3F3F3F; border : 2px solid #101010; }
+*::-webkit-scrollbar { width : 8px; height : 8px; }
+::-webkit-scrollbar-track { background: #101010; border-radius: 8px; }
+::-webkit-scrollbar-thumb { border-radius: 8px; background: #3F3F3F; border : 0.1px solid #FFFFFF; }
 ::-webkit-scrollbar-thumb:hover { background: #4F4F4F; }
 
 @font-face {
@@ -333,7 +333,7 @@ div {
   height : 100px;
   width : 100%;
   display : flex;
-  margin : 8px;
+  overflow-x : scroll;
 }
 
 /* Grid data setup */
@@ -385,7 +385,7 @@ div {
 /* Details infoboxes */
 .infoBox {
   border-radius : 10px;
-  border : 2px solid white;
+  border : 2px solid black;
   padding : 5px;
   margin : 5px;
   flex : 0 0 auto;
@@ -451,11 +451,24 @@ div {
   overflow-y : scroll;
 }
 
+/* Pulse animation */
+.pulse {
+      animation-name: pulse;
+      animation-duration: 1s;
+      animation-iteration-count: infinite;
+      animation-direction: alternate-reverse;
+      animation-timing-function: ease;
+}
+@keyframes pulse {
+  from {}
+  to { background-color: #AFAFAF; }
+}
+
 </style>
 </head><body>
 <div id="tooltip"></div>
 <div id="infoBox" style="display: none;">
-  <p class="infoBoxTitle">name</p>
+  <p class="infoBoxTitle">{name}</p>
   <p>Total time : {total_time} ({total_per_day_time}/d)</p>
   <p>Weekday time : {weekday_time} ({weekday_per_day_time}/d)</p>
   <p>Holiday time : {holiday_time} ({holiday_per_day_time}/d)</p>
