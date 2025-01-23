@@ -30,6 +30,29 @@ def deduceYear(f) # File
   if m.nil? then Time.now.year else m[1].to_i end
 end
 
+class Record
+  attr_accessor :from, :to, :activity
+  def initialize(from, to, act)
+    @from = from
+    @to = to
+    @activity = act
+  end
+  def duration_seconds
+    @to - @from
+  end
+  def duration_minutes
+    self.duration_seconds / 60.0
+  end
+  def date(day_start_in_minutes)
+    f = @from - day_start_in_minutes * 60
+    Time.new(f.year, f.month, f.mday, 0, 0, 0)
+  end
+  def start_minutes_from_day_start(day_start_in_minutes)
+    f = @from - day_start_in_minutes * 60
+    day_start_in_minutes + f.hour * 60 + f.min
+  end
+end
+
 class LogFile
   def initialize(f) # File
     @f = f
@@ -45,9 +68,9 @@ class LogFile
     return nil if @next.nil?
     nxt = getNext()
     if nxt.nil?
-      r = [@next[0], @date + DAY_START_SEC + 24 * 3600, @next[1].strip]
+      r = Record.new(@next[0], @date + DAY_START_SEC + 24 * 3600, @next[1].strip)
     else
-      r = [@next[0], nxt[0], @next[1].strip]
+      r = Record.new(@next[0], nxt[0], @next[1].strip)
     end
     @next = nxt
     r
@@ -69,7 +92,7 @@ class LogFile
 
   def parseDate(s)
     date = s.match(/^(\d\d\d\d-)?(\d\d)-(\d\d).*/)
-    raise "Invalid date #{f}:#{f.lineno} (must match (\d\d\d\d-)?\d\d-\d\d) : \"#{date}\"" if date.nil?
+    raise "Invalid date #{s} (must match (\d\d\d\d-)?\d\d-\d\d) : \"#{date}\"" if date.nil?
     y = date[1]&.to_i || @year
     m = date[2].to_i
     d = date[3].to_i
@@ -90,7 +113,7 @@ class LogFile
       first = self.gets
       @next = nil
       @f.pos = pos
-      @startTime = first[0]
+      @startTime = first.from
     end
     @startTime
   end
@@ -119,11 +142,11 @@ class Logs
     @files.shift
     return @next.shift if @files.empty?
     s = @files.first.gets
-    raise "Two files covering the same period" if (s[0] < @next.first[1])
-    if s[0] > @next.first[1] + 86400
-      @next << [@next.first[1], s[0], "?"]
+    raise "Two files covering the same period" if (s.from < @next.first.to)
+    if s.from > @next.first.to + 86400
+      @next << Record.new(@next.first.to, s.from, "?")
     else
-      @next.first[1] = s[0]
+      @next.first.to = s.from
     end
     @next << s
     return @next.shift

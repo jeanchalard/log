@@ -187,7 +187,7 @@ class String
 end
 
 def readRulesInternal(filename)
-  mode = nil
+  mode = ""
   spec = Rules::Spec.new("unnamed", Rules::Spec::MODE_CALENDAR)
   colors = {}
   counters = []
@@ -198,6 +198,7 @@ def readRulesInternal(filename)
   f = File.new(findRuleFile(filename, '.grc'))
   while l = f.gets
     l = l.chomp
+    l = l.gsub(/([^#]*)#.*/, "\\1") unless mode.match(/colors/i)
     case l
     when /^\s*#/, /^$/ then # nothing, it's a comment or an empty line
     when /^\[([^\]\/]+)(\/i)?\]$/i
@@ -248,6 +249,12 @@ def readRulesInternal(filename)
         if l.match(/(.+) = (.+)/)
           matcher = $1
           category = $2
+          if category.match(/^\d+%(\s+\d+%)*$/)
+            percents = category.scan(/\d+%/)
+            cats = matcher.split("\\+")
+            raise "Can only omit category names when regexp is '+'-separated list of the same size : #{l}" if percents.size != cats.size
+            category = percents.zip(cats).map {|x| "#{x[0]} #{x[1]}" }.join(" ")
+          end
           categoryList = category.scan(/(\d+% .*?)(?= \d+%|$)/)
           categories = []
           if categoryList.empty?
