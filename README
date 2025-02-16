@@ -18,38 +18,50 @@ It looks like this :
 ...
 
 An optional comment can be put after the date separated by
-a space and a colon.
+a space and a colon :
+06-08 : Not feeling well
 
 It will also take a rule file. The rules are essentially
-regexps that will be used to match any activity. The rule
+regexps that will be used to match activities. The rule
 file is composed of multiple sections. A section is started
 by a line with the section name in square brackets. Any
 section can be given any number of times and the script
 will merge them. All sections are optional, although a
 missing [rules] section will result in no rules, meaning
-any non-empty data file will fail to parse, and a
-missing [general] sections will create output files with
+any non-empty data file will fail to parse ; and a
+missing [general] section will create output files with
 the name "unnamed".
 All section names can be suffixed with /i, which makes
 any regexps in the section case-insensitive ; though all
 sections support this, not all sections have regexps so
-it's not helpful for all sections.
+it's not really meaningful for all sections.
 Any line starting with a # is considered a comment.
 
 A [general] section can define a name (defaults to
 "unnamed") and a mode among 'calendar', 'occupation',
-'stack' and 'count' (defaults to 'calendar'). These are
-given with the 'name = ' and 'mode = ' directives, the
-format is fairly intuitive. The name and mode directives
-are special in two respects : they have to be given in
-the top-level file (they are ignored in included files)
-and if multiple of either directive are encountered then
-the latter directive wins.
+'stack', 'count', and 'interactive' (defaults to
+'calendar'). These are given with the 'name = ' and
+'mode = ' directives, the format is fairly intuitive.
+The name and mode directives are special in two
+respects : they have to be given in the top-level file
+(they are ignored in included files) and if multiple
+of either directive are encountered then the latter
+directive wins.
+The 'interactive' mode outputs dynamic HTML files, the
+'count' mode outputs text, and the other modes output
+PNG files. All image-outputting modes are deprecated
+now seeing how the image format is too limiting compared
+to the interactivity allowed by the HTML output. I'm not
+even sure they still work. See a description of the
+modes below in this README.
 The [general] section also supports an
 'include <filename>' directive to load the given file
-at the time the include rule is encountered. Priorities
-between rules can be managed by having multiple [general]
-sections to have the includes in the desired order.
+at the place the include rule is encountered (it
+behaves as if the 'include <filename>' directive is
+replaced verbatim with the content of the designated
+file). Priorities between rules can be managed by having
+multiple [general] sections to have the includes in the
+desired order if necessary.
 
 The [rules] section is the most important section as it
 defines the list of rules that will be considered to
@@ -76,15 +88,23 @@ anything else (at least if this processing is desired).
 In counters and histograms, sleep is counted as ending
 the day, not starting it, and will be reported as being
 part of the day it ends in graphs.
+Newer versions of the tool will also match activity
+names from the rule to the regexps in the file, in a
+recursive fashion. For example, with rules
+Novel = Book
+Manga = Book
+Detective Conan = Manga
+...then a log line of 'Detective Conan' will be
+considered a manga, which will in turn be considered a
+book. I think this is only supported in 'interactive'
+mode, at least it hasn't been tested in image mode
+since this capability was added after they have been
+deprecated.
 
-The [collapse] section defines a list of collapses, at
-the following format :
-A = B = ... = C = D
-This means category A and B and C (and any in between)
-should all be collapsed into category D. This is very
-useful to reuse rules but have different rules files
-that will collapse a more detailed ruleset to a coarser
-desired granularity.
+Because of the recursive matching, the [collapse]
+section is now deprecated, since it's just a more
+complicated way of doing the same thing. Dive into the
+repo history if you want to know how it used to work.
 
 The [counters] section consists of a list of counters
 at the following format :
@@ -117,7 +137,8 @@ The policy must be either 'First', 'Last' or 'Each'.
 This defines what to do when multiple strings
 matching the regexp appear during a day. Respectively
 put the marker on the first, last of them, or on each
-of them.
+of them. I think this section is not implemented in
+interactive mode.
 
 The [colors] section defines a color for an activity
 or marker in the output images. The format is :
@@ -136,7 +157,18 @@ the tool).
 The tool reads holidays from a 'holiday.rb' file.
 This is a Ruby file with self-explanatory syntax.
 
-The tool supports four modes.
+The tool supports five modes, three of which are
+deprecated – the 'interactive' mode is meant to show
+all data image modes used to show in a nicer,
+interactive way. I've made many changes since the
+last time I used any other mode than 'interactive'
+so it's likely they are not even working any more in
+the latest version.
+• Interactive mode
+  This mode produces a static HTML file which can be
+  opened in a browser and show a primary view similar
+  to the 'calendar' mode, and a secondary view with
+  a pie chart showing time use.
 • Calendar mode
   This mode produces a calendar-style output. The day
   starts at 05:00 and ends at 29:00. Some counting
@@ -166,7 +198,9 @@ The tool supports four modes.
   time went into it, with the exact number on top of
   the bar. Judicious use of collapses will make such
   a graph more useful (a histogram with many
-  activites per day is very hard to read).
+  activites per day is very hard to read). ; not
+  sure how this even behaves since the deprecation
+  of collapses.
   The total won't always add to 24h a day unless the
   log indicates the same time of getting up every
   day. This is because the tool will always count
