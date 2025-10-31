@@ -16,7 +16,7 @@ begin
   if (now - nxt < TOLERANCE) # don't capture on non-boundary time, this happens after device sleeps
     date = now.strftime("%Y%m%d_%H%M").sub(/(\d\d)_(0[0-4])/){|m| "\%02d_\%02d" % [$1.to_i-1, $2.to_i+24]}
     file = "#{DEST}/#{PREFIX}_#{date}.jpg"
-    athome = `qdbus org.kde.kdeconnect /modules/kdeconnect/devices/b703b17d61d9bab4 org.kde.kdeconnect.device.isReachable`
+    athome = `qdbus org.kde.kdeconnect /modules/kdeconnect/devices/f4e95886c71b4c2087fadd747a2d4fa2 org.kde.kdeconnect.device.isReachable`
     athome.chomp!
     $stderr.puts "Capture #{file} #{Time.now}"
     begin
@@ -24,7 +24,7 @@ begin
       Timeout.timeout(10) {
         `spectacle -fbn -o #{file}`
       }
-    rescue Timeout::Error => e
+    rescue Timeout::Error
       `ps -eo pid,cmd | grep spectacle | grep -v grep | cut -d \  -f 2 | xargs kill -9`
     end
     file = "#{DEST}/#{CAM_PREFIX}_#{date}.jpg"
