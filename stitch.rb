@@ -24,7 +24,12 @@ Dir["#{DIR}/*"].each do |f|
   date = m[2]
   PREFIXES[prefix] = true
   FILES[date] = {} unless FILES.has_key?(date)
-  FILES[date][prefix] = f
+  if 0 == File.size(f)
+    puts "Deleting 0-sized #{f}"
+    FileUtils.rm(f)
+  else
+    FILES[date][prefix] = f
+  end
 end
 
 def generate(date)
@@ -57,9 +62,15 @@ end
 total = FILES.length.to_f
 done = 0.to_f
 puts
+prev = ""
 FILES.keys.sort.each do |k|
-  puts("[A%.02f%% %s %s             " % [100 * done / total, k, FILES[k].keys])
+  s = "[A%.02f%% %s %s" % [100 * done / total, k, FILES[k].keys]
+  s += " " * (prev.length - s.length) unless prev.length <= s.length
+  puts(s)
+  prev = s
   generate(k)
   done += 1
 end
-puts("[A100%                                         ")
+s = "[A100%"
+s += " " * (prev.length - s.length) unless prev.length <= s.length
+puts(s)
